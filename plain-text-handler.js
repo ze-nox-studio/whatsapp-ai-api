@@ -67,6 +67,12 @@ komutları gönderebilirsiniz:
   Örnek: GONDER 05551234567 | Selamlar
   -> Rehberdeki kişi ismini (veya numarayı) otomatik bulup mesajı gönderir.
 
+• DOSYA <kişi_adı_veya_numara> | <dosya_yolu_veya_url> | [açıklama_metni]
+  (veya FILE <kişi_adı_veya_numara> | <dosya_yolu_veya_url> | [açıklama_metni])
+  Örnek: DOSYA Ahmet Yılmaz | C:\\Belgeler\\rapor.pdf | Güncel rapor ektedir
+  Örnek: FILE Ayşe Demir | https://ornek.com/gorsel.png | Tasarım görseli
+  -> Belirtilen kişiye veya numaraya bilgisayardaki dosyayı (PDF, görsel, belge, ses, video) veya URL'yi gönderir.
+
 • KISILER [arama_kelimesi]
   (veya REHBER [arama_kelimesi] veya CONTACTS [arama_kelimesi])
   Örnek: KISILER Ahmet
@@ -107,11 +113,18 @@ Tarayıcı, cURL, fetch veya herhangi bir araçla doğrudan çağrılabilir:
    Veya GET ile tek satırda:
    GET http://localhost:${port}/text/send?to=Ahmet&text=Merhaba%20nasilsin
 
-6) Rehberde Kişi Arama / Listeleme:
+6) İsimle veya Numarayla Dosya / Medya Gönderme (POST veya GET):
+   POST http://localhost:${port}/text/send-file
+   Body (text/plain): Ahmet Yılmaz | C:\\Belgeler\\rapor.pdf | Rapor ektedir
+
+   Veya GET ile tek satırda:
+   GET http://localhost:${port}/text/send-file?to=Ahmet&filePath=C:\\Belgeler\\rapor.pdf&caption=Rapor
+
+7) Rehberde Kişi Arama / Listeleme:
    GET http://localhost:${port}/text/contacts?search=Ahmet&limit=50
    GET http://localhost:${port}/text/contacts/Ahmet
 
-7) Mesaj İçeriği Arama:
+8) Mesaj İçeriği Arama:
    GET http://localhost:${port}/text/search?q=toplanti&limit=20
 
 --------------------------------------------------------------------------------
@@ -125,6 +138,7 @@ Terminal erişimi olan yapay zekalar doğrudan şu komutları çalıştırabilir
   node wa-cli.js text "KISILER Ayşe"
   node wa-cli.js text "ARA toplantı"
   node wa-cli.js text "GONDER Ahmet Yılmaz | Merhaba!"
+  node wa-cli.js text "DOSYA Ahmet Yılmaz | C:\\Belgeler\\rapor.pdf | Rapor ektedir"
 ================================================================================
 `;
 }
@@ -286,6 +300,31 @@ async function executePlainTextCommand(waManager, rawInput, port = 3000) {
         `Alıcı Adı      : ${res.recipientName}`,
         `Alıcı Telefon  : +${res.recipientPhone}`,
         `Gönderilen Msj : ${res.text}`,
+        `Tarih / Saat   : ${formatDateTr(Date.now())}`
+      ].join('\n');
+    }
+
+    case 'DOSYA':
+    case 'DOSYA_GONDER':
+    case 'DOSYAGÖNDER':
+    case 'MEDYA':
+    case 'FILE':
+    case 'SEND_FILE': {
+      const parts = rest.split('|').map((s) => s.trim());
+      if (parts.length < 2 || !parts[0] || !parts[1]) {
+        throw new Error('Kullanım: DOSYA <Kişi Adı veya Numara> | <Dosya Yolu veya URL> | [Açıklama Metni]');
+      }
+      const toPart = parts[0];
+      const filePart = parts[1];
+      const captionPart = parts.slice(2).join(' | ');
+      const res = await waManager.sendMedia(toPart, filePart, captionPart);
+      return [
+        '✅ DOSYA BAŞARIYLA GÖNDERİLDİ',
+        `Alıcı Adı      : ${res.recipientName}`,
+        `Alıcı Telefon  : +${res.recipientPhone}`,
+        `Dosya Adı      : ${res.filename}`,
+        `Dosya Türü     : ${res.mimetype}`,
+        `Açıklama       : ${res.caption || '-'}`,
         `Tarih / Saat   : ${formatDateTr(Date.now())}`
       ].join('\n');
     }

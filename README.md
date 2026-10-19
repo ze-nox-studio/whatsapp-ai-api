@@ -106,6 +106,7 @@ Give any AI agent this simple prompt:
 | `MESSAGES <Name or Phone> \| [limit]` | `MESAJLAR`, `OKU` | Fetch full message history with a contact or group | `MESSAGES Ahmet Yilmaz \| 40` |
 | `RECENT [limit]` | `SON_MESAJLAR` | List the most recent messages across all chats | `RECENT 25` |
 | `SEND <Name or Phone> \| <Message>` | `GONDER`, `YAZ` | Resolve contact name or number and send a message | `SEND Ahmet Yilmaz \| Hello!` |
+| `FILE <Name or Phone> \| <Path/URL> \| [Caption]` | `DOSYA`, `MEDYA` | Send a local file (PDF, image, doc, audio, video, ZIP) or URL | `FILE Ahmet Yilmaz \| C:\report.pdf \| Report` |
 | `CONTACTS [search]` | `KISILER`, `REHBER` | List or search contacts with real phone numbers | `CONTACTS Ayse` |
 | `SEARCH <keyword>` | `ARA` | Search message history by keyword | `SEARCH meeting` |
 | `SYNC` | `SENKRONIZE` | Force a full sync of contacts, chats, and history | `SYNC` |
@@ -123,6 +124,7 @@ Give any AI agent this simple prompt:
 - `GET  /text/chats?limit=25` — Plain-text recent chats list
 - `GET  /text/messages/:chat?limit=40` — Plain-text message history by contact name or phone number
 - `POST /text/send` — Send a message using `Contact Name | Message` in plain-text body
+- `POST /text/send-file` — Send a file using `Contact Name | FilePath or URL | [Caption]` in plain-text body
 - `GET  /text/contacts/:search` — Search contacts in plain text
 - `GET  /text/search/:query` — Search messages in plain text
 
@@ -131,6 +133,7 @@ Give any AI agent this simple prompt:
 - `GET  /api/chats` — List recent chats (`?limit=30&search=...`)
 - `GET  /api/messages` — Fetch messages (`?chatId=Ahmet%20Yilmaz&limit=40`)
 - `POST /api/send` — Send a message (`{ "to": "Ahmet Yilmaz", "text": "Hello!" }`)
+- `POST /api/send-file` — Send a file/media (`{ "to": "Ahmet Yilmaz", "filePath": "C:\\report.pdf", "caption": "Report" }` or `{ "to": "...", "base64": "...", "filename": "report.pdf" }`)
 - `GET  /api/contacts` — List or search contacts (`?search=Ahmet`)
 - `GET  /api/search` — Search message history (`?query=meeting`)
 - `POST /mcp` — Model Context Protocol (JSON-RPC 2.0) HTTP endpoint
@@ -144,9 +147,10 @@ When connected via MCP (`mcp-server.js` or `http://localhost:3000/mcp`), AI agen
 
 | Tool Name | Description |
 | :--- | :--- |
-| `whatsapp_plain_text` | Execute any plain-text command (`STATUS`, `CHATS`, `MESSAGES`, `SEND`, `CONTACTS`, `SEARCH`) |
+| `whatsapp_plain_text` | Execute any plain-text command (`STATUS`, `CHATS`, `MESSAGES`, `SEND`, `FILE`, `CONTACTS`, `SEARCH`) |
 | `whatsapp_get_status` | Get WhatsApp connection status, active phone number, and message/contact counts |
 | `whatsapp_send_message` | Send a WhatsApp message by contact name, phone number, or group name |
+| `whatsapp_send_file` | Send any file, image, PDF, audio, video, or document by contact name or phone number (`filePath` or `url`) |
 | `whatsapp_get_chats` | Retrieve recent chats with contact names, phone numbers, and unread counts |
 | `whatsapp_get_messages` | Retrieve chat history for a specific contact/group or recent messages across all chats |
 | `whatsapp_search_messages` | Search through message history by keyword or sender name |
@@ -162,6 +166,7 @@ node wa-cli.js text "STATUS"
 node wa-cli.js text "CHATS 15"
 node wa-cli.js text "MESSAGES Ahmet Yilmaz"
 node wa-cli.js text "SEND Ahmet Yilmaz | Hello!"
+node wa-cli.js text "FILE Ahmet Yilmaz | C:\report.pdf | Report attached"
 node wa-cli.js text "CONTACTS Ayse"
 node wa-cli.js text "SEARCH meeting"
 
@@ -170,6 +175,7 @@ node wa-cli.js status
 node wa-cli.js chats 20
 node wa-cli.js messages "Ahmet Yilmaz" 30
 node wa-cli.js send "Ahmet Yilmaz" "Hello!"
+node wa-cli.js send-file "Ahmet Yilmaz" "C:\report.pdf" "Report attached"
 ```
 
 ---

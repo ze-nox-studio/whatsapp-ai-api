@@ -11,13 +11,13 @@ const { executePlainTextCommand } = require('./plain-text-handler');
 const TOOLS = [
   {
     name: 'whatsapp_plain_text',
-    description: 'WhatsApp ile doğrudan DÜZ METİN (Plain Text) komutlarıyla iletişim kurar ve düz metin yanıt alır. Komutlar: "DURUM", "SOHBETLER 20", "MESAJLAR <Kişi Adı>", "SON_MESAJLAR 25", "GONDER <Kişi Adı veya Numara> | <Mesaj>", "KISILER <Arama>", "ARA <Kelime>", "YARDIM".',
+    description: 'WhatsApp ile doğrudan DÜZ METİN (Plain Text) komutlarıyla iletişim kurar ve düz metin yanıt alır. Komutlar: "DURUM", "SOHBETLER 20", "MESAJLAR <Kişi Adı>", "SON_MESAJLAR 25", "GONDER <Kişi Adı veya Numara> | <Mesaj>", "DOSYA <Kişi Adı veya Numara> | <Dosya Yolu veya URL> | [Açıklama]", "KISILER <Arama>", "ARA <Kelime>", "YARDIM".',
     inputSchema: {
       type: 'object',
       properties: {
         command: {
           type: 'string',
-          description: 'Düz metin komutu (Örn: "MESAJLAR Ahmet Yılmaz", "GONDER Ayşe Demir | Merhaba nasılsın?", "SOHBETLER 15", "KISILER Mehmet")'
+          description: 'Düz metin komutu (Örn: "MESAJLAR Ahmet Yılmaz", "GONDER Ayşe Demir | Merhaba nasılsın?", "DOSYA Ahmet Yılmaz | C:\\rapor.pdf | Rapor ektedir", "SOHBETLER 15")'
         }
       },
       required: ['command']
@@ -52,6 +52,32 @@ const TOOLS = [
         }
       },
       required: ['to', 'text']
+    }
+  },
+  {
+    name: 'whatsapp_send_file',
+    description: 'Belirtilen KİŞİ İSMİNE (örn: "Ahmet Yılmaz") veya telefon numarasına bilgisayardaki bir dosyayı (PDF, görsel, belge, ses, video, ZIP vb.) veya URL adresindeki dosyayı gönderir.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        to: {
+          type: 'string',
+          description: 'Alıcı KİŞİ İSMİ (örn: "Ahmet Yılmaz", "Ayşe Demir") veya telefon numarası (örn: "05551234567")'
+        },
+        filePath: {
+          type: 'string',
+          description: 'Bilgisayardaki yerel dosya yolu (örn: "C:\\Belgeler\\rapor.pdf") veya HTTP/HTTPS dosya URL adresi'
+        },
+        caption: {
+          type: 'string',
+          description: 'Opsiyonel: Dosya ile birlikte gönderilecek açıklama mesajı'
+        },
+        sendAsDocument: {
+          type: 'boolean',
+          description: 'Opsiyonel: Görsel/videoları sıkıştırmadan orijinal belge (doküman) olarak gönder (varsayılan: false)'
+        }
+      },
+      required: ['to', 'filePath']
     }
   },
   {
@@ -156,6 +182,14 @@ async function executeTool(waManager, name, args = {}) {
       return await waManager.sendMessage(args.to, args.text, {
         replyToMessageId: args.replyToMessageId
       });
+    }
+    case 'whatsapp_send_file': {
+      return await waManager.sendMedia(
+        args.to,
+        args.filePath || args.url,
+        args.caption || '',
+        { sendAsDocument: Boolean(args.sendAsDocument) }
+      );
     }
     case 'whatsapp_get_chats': {
       return {

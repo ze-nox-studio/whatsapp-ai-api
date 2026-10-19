@@ -42,9 +42,9 @@ app.use(
   })
 );
 
-app.use(express.text({ type: ['text/*', 'application/octet-stream'], limit: '1mb' }));
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(express.text({ type: ['text/*', 'application/octet-stream'], limit: '50mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Opsiyonel API Anahtarı (WA_API_KEY ortam değişkeni tanımlıysa kontrol eder)
@@ -215,6 +215,38 @@ async function handlePlainTextSend(req, res) {
 app.get('/text/send', handlePlainTextSend);
 app.post('/text/send', handlePlainTextSend);
 
+// Düz Metin Dosya / Medya Gönderme (GET ve POST destekli)
+async function handlePlainTextSendFile(req, res) {
+  try {
+    let to = req.query.to || req.query.name || req.query.phone || '';
+    let filePath = req.query.filePath || req.query.file || req.query.url || req.query.path || '';
+    let caption = req.query.caption || req.query.text || req.query.message || '';
+
+    if (typeof req.body === 'string' && req.body.trim()) {
+      const raw = req.body.trim().replace(/^(DOSYA|DOSYA_GONDER|DOSYAGÖNDER|MEDYA|FILE|SEND_FILE)\s+/i, '');
+      const parts = raw.split('|').map((s) => s.trim());
+      if (parts.length >= 2) {
+        to = parts[0];
+        filePath = parts[1];
+        caption = parts.slice(2).join(' | ');
+      }
+    } else if (req.body && typeof req.body === 'object') {
+      to = to || req.body.to || req.body.name || req.body.phone || req.body.chatId || '';
+      filePath = filePath || req.body.filePath || req.body.file || req.body.url || req.body.path || '';
+      caption = caption || req.body.caption || req.body.text || req.body.message || '';
+    }
+
+    const cmd = caption ? `DOSYA ${to} | ${filePath} | ${caption}` : `DOSYA ${to} | ${filePath}`;
+    const output = await executePlainTextCommand(waManager, cmd, PORT);
+    sendPlain(res, output);
+  } catch (err) {
+    sendPlain(res, `❌ HATA: ${err.message}`, 400);
+  }
+}
+
+app.get('/text/send-file', handlePlainTextSendFile);
+app.post('/text/send-file', handlePlainTextSendFile);
+
 // ============================================================================
 // 2. JSON REST API ENDPOINTS
 // ============================================================================
@@ -250,12 +282,97 @@ app.post('/api/send', async (req, res) => {
       const output = await executePlainTextCommand(waManager, `GONDER ${req.body}`, PORT);
       return sendPlain(res, output);
     }
-    const { to, phone, chatId, name, text, message, replyToMessageId } = req.body;
+    const {
+      to,
+      phone,
+      chatId,
+      name,
+      text,
+      message,
+      caption,
+      filePath,
+      url,
+      base64,
+      mimetype,
+      filename,
+      sendAsDocument,
+      replyToMessageId
+    } = req.body;
     const target = to || name || phone || chatId;
+
+    // If file/media payload is included in /api/send, automatically route to sendMedia!
+    if (filePath || url || base64) {
+      const result = await waManager.sendMedia(
+        target,
+        { filePath, url, base64, mimetype, filename },
+        caption || text || message || '',
+        { sendAsDocument: Boolean(sendAsDocument), replyToMessageId }
+      );
+      if (req.query.format === 'text') {
+        return sendPlain(
+          res,
+          `✅ DOSYA GÖNDERİLDİ -> ${result.recipientName} (+${result.recipientPhone}): ${result.filename}`
+        );
+      }
+      return res.json({ ok: true, ...result });
+    }
+
     const bodyText = text || message;
     const result = await waManager.sendMessage(target, bodyText, { replyToMessageId });
     if (req.query.format === 'text') {
       return sendPlain(res, `✅ MESAJ GÖNDERİLDİ -> ${result.recipientName} (+${result.recipientPhone}): ${result.text}`);
+    }
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/send-file', async (req, res) => {
+  try {
+    if (typeof req.body === 'string') {
+      const output = await executePlainTextCommand(waManager, `DOSYA ${req.body}`, PORT);
+      return sendPlain(res, output);
+    }
+    const {
+      to,
+      phone,
+      chatId,
+      name,
+      filePath,
+      file,
+      path: localPath,
+      url,
+      base64,
+      data,
+      mimetype,
+      filename,
+      caption,
+      text,
+      message,
+      sendAsDocument,
+      replyToMessageId
+    } = req.body;
+
+    const target = to || name || phone || chatId;
+    const result = await waManager.sendMedia(
+      target,
+      {
+        filePath: filePath || file || localPath,
+        url,
+        base64: base64 || data,
+        mimetype,
+        filename
+      },
+      caption || text || message || '',
+      { sendAsDocument: Boolean(sendAsDocument), replyToMessageId }
+    );
+
+    if (req.query.format === 'text') {
+      return sendPlain(
+        res,
+        `✅ DOSYA GÖNDERİLDİ -> ${result.recipientName} (+${result.recipientPhone}): ${result.filename}`
+      );
     }
     res.json({ ok: true, ...result });
   } catch (err) {
@@ -363,15 +480,15 @@ app.get('/openapi.json', (req, res) => {
     openapi: '3.1.0',
     info: {
       title: 'WhatsApp AI API Bridge (Plain-Text & JSON)',
-      version: '2.0.0',
-      description: 'Gemini, OpenCode, Claude ve tüm yapay zeka modelleri için Düz Metin (Plain Text), REST API ve MCP servisi.'
+      version: '2.1.0',
+      description: 'Gemini, OpenCode, Claude ve tüm yapay zeka modelleri için Düz Metin (Plain Text), Dosya Gönderimi, REST API ve MCP servisi.'
     },
     servers: [{ url: `http://localhost:${PORT}` }],
     paths: {
       '/text': {
         post: {
           operationId: 'whatsapp_plain_text',
-          summary: 'Düz metin komutu gönderir ve düz metin yanıt alır (Örn: MESAJLAR Ahmet Yılmaz, GONDER Ahmet | Merhaba)',
+          summary: 'Düz metin komutu gönderir ve düz metin yanıt alır (Örn: MESAJLAR Ahmet Yılmaz, GONDER Ahmet | Merhaba, DOSYA Ahmet | C:\\rapor.pdf | Rapor)',
           requestBody: {
             required: true,
             content: { 'text/plain': { schema: { type: 'string' } } }
@@ -382,6 +499,17 @@ app.get('/openapi.json', (req, res) => {
           operationId: 'whatsapp_plain_text_get',
           summary: 'URL parametresiyle düz metin komutu çalıştırır (?cmd=MESAJLAR%20Ahmet)',
           responses: { '200': { description: 'Düz metin yanıt' } }
+        }
+      },
+      '/text/send-file': {
+        post: {
+          operationId: 'whatsapp_plain_text_send_file',
+          summary: 'Düz metin ile dosya gönderir (Body: Kişi Adı | Dosya Yolu veya URL | Açıklama)',
+          requestBody: {
+            required: true,
+            content: { 'text/plain': { schema: { type: 'string' } } }
+          },
+          responses: { '200': { description: 'Düz metin dosya gönderim sonucu' } }
         }
       },
       '/ai.txt': {
@@ -411,6 +539,21 @@ app.get('/openapi.json', (req, res) => {
             }
           },
           responses: { '200': { description: 'Gönderim sonucu' } }
+        }
+      },
+      '/api/send-file': {
+        post: {
+          operationId: 'whatsapp_send_file',
+          summary: 'WhatsApp üzerinden kişi adına, numaraya veya gruba dosya/görsel/belge gönderir',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: TOOLS.find((t) => t.name === 'whatsapp_send_file').inputSchema
+              }
+            }
+          },
+          responses: { '200': { description: 'Dosya gönderim sonucu' } }
         }
       },
       '/api/chats': {

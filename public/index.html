@@ -359,18 +359,35 @@
         </div>
 
         <div class="card">
-          <h2>🚀 İsimle veya Numarayla Mesaj Gönder</h2>
+          <h2>🚀 İsimle veya Numarayla Mesaj & Dosya Gönder</h2>
           <form onsubmit="sendTestMessage(event)">
             <div class="form-group">
               <label>Kişi İsmi veya Telefon Numarası (Örn: Ahmet Yılmaz, Ayşe Demir, 0555...)</label>
               <input type="text" id="toInput" list="contactsDatalist" placeholder="Kişi adı veya numara yazın..." required />
               <datalist id="contactsDatalist"></datalist>
             </div>
+
             <div class="form-group">
-              <label>Mesajınız</label>
-              <textarea id="textInput" placeholder="Merhaba, bu mesaj WhatsApp AI API üzerinden gönderildi!" required></textarea>
+              <label>📎 Dosya / Görsel / Belge Ekle (İsteğe Bağlı)</label>
+              <div style="background:#182229;border:1px dashed #2a3942;border-radius:8px;padding:10px;">
+                <input type="file" id="fileInput" onchange="handleFileSelect()" style="font-size:12.5px;color:var(--muted);padding:4px 0;border:none;background:transparent;" />
+                <div id="filePreviewBox" style="display:none;margin-top:8px;padding:6px 10px;background:#111b21;border-radius:6px;font-size:12px;color:#06cf9c;justify-content:space-between;align-items:center;">
+                  <span id="filePreviewName"></span>
+                  <button type="button" onclick="clearSelectedFile()" style="background:none;border:none;color:var(--danger);cursor:pointer;font-weight:700;font-size:12px;">✕ Kaldır</button>
+                </div>
+                <input type="text" id="filePathInput" placeholder="Veya bilgisayardaki dosya yolu / URL (Örn: C:\rapor.pdf)" style="margin-top:8px;font-size:12.5px;padding:7px 10px;" />
+                <label style="display:flex;align-items:center;gap:6px;margin-top:8px;margin-bottom:0;font-size:12px;cursor:pointer;color:var(--muted);">
+                  <input type="checkbox" id="sendAsDocCheck" style="width:auto;" />
+                  Görsel/videoları sıkıştırmadan orijinal Belge (Doküman) olarak gönder
+                </label>
+              </div>
             </div>
-            <button type="submit" class="btn" style="width: 100%;">Mesajı Gönder</button>
+
+            <div class="form-group">
+              <label>Mesajınız veya Dosya Açıklaması (Caption)</label>
+              <textarea id="textInput" placeholder="Mesajınızı veya dosya açıklamasını yazın..."></textarea>
+            </div>
+            <button type="submit" id="sendBtn" class="btn" style="width: 100%;">Gönder</button>
             <p id="sendResult" style="margin-top: 10px; font-size: 13px;"></p>
           </form>
         </div>
@@ -419,7 +436,7 @@
             <button class="btn btn-sm" style="background:#182229;border:1px solid #2a3942;" onclick="runPlainCmd('YARDIM')">YARDIM (Kılavuz)</button>
           </div>
           <div style="display: flex; gap: 8px; margin-bottom: 10px;">
-            <input type="text" id="plainCmdInput" value="SOHBETLER 10" placeholder="Örn: MESAJLAR Ahmet Yılmaz veya GONDER Ahmet | Merhaba" style="flex:1;background:#182229;border:1px solid #2a3942;color:#fff;padding:8px 12px;border-radius:8px;font-size:13px;" />
+            <input type="text" id="plainCmdInput" value="SOHBETLER 10" placeholder="Örn: MESAJLAR Ahmet Yılmaz, GONDER Ahmet | Merhaba veya DOSYA Ahmet | C:\rapor.pdf" style="flex:1;background:#182229;border:1px solid #2a3942;color:#fff;padding:8px 12px;border-radius:8px;font-size:13px;" />
             <button class="btn" onclick="runPlainCmd()">Çalıştır</button>
           </div>
           <pre id="plainCmdOutput" style="max-height: 240px; overflow-y: auto; white-space: pre-wrap;">Komut çıktısı burada düz metin (plain text) olarak görünecek...</pre>
@@ -434,12 +451,13 @@
 Önce http://localhost:3000/ai.txt adresindeki düz metin kullanım kılavuzunu oku.
 Ardından http://localhost:3000/text adresine düz metin komutları göndererek
 (veya tanımlı whatsapp MCP aracını kullanarak) WhatsApp mesajlarımı yönet."</pre>
-          <pre>• DURUM                           -> Bağlantı ve hesap bilgisi
-• SOHBETLER 20                    -> Son 20 konuşmayı ve son mesajları listeler
-• MESAJLAR Ahmet Yılmaz           -> Ahmet Yılmaz ile olan mesaj geçmişini getirir
-• GONDER Ahmet | Merhaba!         -> Ahmet'e doğrudan isimle mesaj gönderir
-• KISILER Ayşe                    -> Rehberde Ayşe isimli kişileri ve numaralarını bulur
-• ARA toplantı                    -> Mesaj geçmişinde 'toplantı' kelimesini arar</pre>
+          <pre>• DURUM                                      -> Bağlantı ve hesap bilgisi
+• SOHBETLER 20                               -> Son 20 konuşmayı ve son mesajları listeler
+• MESAJLAR Ahmet Yılmaz                      -> Ahmet Yılmaz ile olan mesaj geçmişini getirir
+• GONDER Ahmet | Merhaba!                    -> Ahmet'e doğrudan isimle mesaj gönderir
+• DOSYA Ahmet | C:\rapor.pdf | Rapor ektedir -> Ahmet'e bilgisayardaki dosyayı gönderir
+• KISILER Ayşe                               -> Rehberde Ayşe isimli kişileri ve numaralarını bulur
+• ARA toplantı                               -> Mesaj geçmişinde 'toplantı' kelimesini arar</pre>
         </div>
       </div>
     </div>
@@ -620,24 +638,102 @@ Ardından http://localhost:3000/text adresine düz metin komutları göndererek
       } catch (e) {}
     }
 
+    function handleFileSelect() {
+      const fileInput = document.getElementById('fileInput');
+      const previewBox = document.getElementById('filePreviewBox');
+      const previewName = document.getElementById('filePreviewName');
+      if (fileInput.files && fileInput.files[0]) {
+        const f = fileInput.files[0];
+        const sizeKB = (f.size / 1024).toFixed(1);
+        previewName.textContent = `📄 ${f.name} (${sizeKB} KB)`;
+        previewBox.style.display = 'flex';
+      } else {
+        previewBox.style.display = 'none';
+      }
+    }
+
+    function clearSelectedFile() {
+      const fileInput = document.getElementById('fileInput');
+      fileInput.value = '';
+      document.getElementById('filePreviewBox').style.display = 'none';
+    }
+
+    function fileToDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
     async function sendTestMessage(e) {
       e.preventDefault();
       const to = document.getElementById('toInput').value.trim();
       const text = document.getElementById('textInput').value.trim();
+      const fileInput = document.getElementById('fileInput');
+      const filePathInput = document.getElementById('filePathInput').value.trim();
+      const sendAsDocument = document.getElementById('sendAsDocCheck').checked;
       const out = document.getElementById('sendResult');
+
+      const hasSelectedFile = fileInput.files && fileInput.files[0];
+      const hasFilePath = Boolean(filePathInput);
+
+      if (!hasSelectedFile && !hasFilePath && !text) {
+        out.style.color = 'var(--danger)';
+        out.textContent = '❌ Lütfen bir mesaj yazın veya gönderilecek bir dosya seçin.';
+        return;
+      }
+
       out.style.color = 'var(--muted)';
-      out.textContent = 'Gönderiliyor...';
+      out.textContent = hasSelectedFile || hasFilePath ? '📤 Dosya gönderiliyor, lütfen bekleyin...' : 'Gönderiliyor...';
 
       try {
-        const res = await fetch('/api/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to, text })
-        });
+        let res;
+        if (hasSelectedFile) {
+          const f = fileInput.files[0];
+          const dataUrl = await fileToDataUrl(f);
+          res = await fetch('/api/send-file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to,
+              base64: dataUrl,
+              mimetype: f.type || 'application/octet-stream',
+              filename: f.name,
+              caption: text,
+              sendAsDocument
+            })
+          });
+        } else if (hasFilePath) {
+          res = await fetch('/api/send-file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to,
+              filePath: filePathInput,
+              caption: text,
+              sendAsDocument
+            })
+          });
+        } else {
+          res = await fetch('/api/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to, text })
+          });
+        }
+
         const data = await res.json();
         if (data.ok) {
           out.style.color = '#06cf9c';
-          out.textContent = `✅ "${data.recipientName}" (+${data.recipientPhone}) kişisine mesaj gönderildi!`;
+          if (data.filename) {
+            out.textContent = `✅ "${data.recipientName}" (+${data.recipientPhone}) kişisine "${data.filename}" dosyası gönderildi!`;
+            clearSelectedFile();
+            document.getElementById('filePathInput').value = '';
+          } else {
+            out.textContent = `✅ "${data.recipientName}" (+${data.recipientPhone}) kişisine mesaj gönderildi!`;
+          }
           document.getElementById('textInput').value = '';
           fetchMessages();
         } else {

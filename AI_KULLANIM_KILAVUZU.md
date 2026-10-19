@@ -21,6 +21,7 @@ Yapay zeka ajanları hiçbir JSON ayrıştırma (parsing) işlemine gerek duymad
 | `SON_MESAJLAR [limit]` | Tüm sohbetlerdeki son mesajları listeler. | `SON_MESAJLAR 25` |
 | `GELENLER [limit]` | Sadece karşı taraftan gelen son mesajları listeler. | `GELENLER 20` |
 | `GONDER <Kişi Adı veya Tel> \| <Mesaj>` | Rehberdeki kişi ismini (veya numarayı) bulup mesaj gönderir. | `GONDER Ahmet Yılmaz \| Merhaba, nasılsın?` |
+| `DOSYA <Kişi Adı veya Tel> \| <Dosya Yolu veya URL> \| [Açıklama]` | Kişi ismine veya numaraya bilgisayardaki dosyayı (PDF, görsel, belge, ses, video) veya URL'yi gönderir. | `DOSYA Ahmet Yılmaz \| C:\rapor.pdf \| Rapor ektedir` |
 | `KISILER [arama]` (veya `REHBER`) | Rehberdeki kişileri gerçek telefon numaralarıyla (`+905...`) listeler. | `KISILER Ayşe` |
 | `ARA <kelime>` (veya `SEARCH`) | Tüm mesaj geçmişinde kelime araması yapar. | `ARA toplantı` |
 | `SENKRONIZE` (veya `SYNC`) | WhatsApp Web üzerinden tüm kişileri ve mesaj geçmişini yeniler. | `SENKRONIZE` |
@@ -50,6 +51,10 @@ Yapay zeka ajanları `curl`, `fetch`, `Invoke-RestMethod`, `python requests` vey
    - **POST (`text/plain`):** `POST http://localhost:3000/text/send` $\rightarrow$ Gövde (Body): `Ahmet Yılmaz | Merhaba!`
    - **POST (`/text`):** `POST http://localhost:3000/text` $\rightarrow$ Gövde (Body): `GONDER Ahmet Yılmaz | Merhaba!`
    - **GET (Tek satır URL):** `GET http://localhost:3000/text/send?to=Ahmet&text=Merhaba`
+8. **İsimle veya Numarayla Dosya / Medya Gönder:**
+   - **POST (`text/plain`):** `POST http://localhost:3000/text/send-file` $\rightarrow$ Gövde (Body): `Ahmet Yılmaz | C:\rapor.pdf | Rapor ektedir`
+   - **POST (`/text`):** `POST http://localhost:3000/text` $\rightarrow$ Gövde (Body): `DOSYA Ahmet Yılmaz | C:\rapor.pdf | Rapor ektedir`
+   - **GET (Tek satır URL):** `GET http://localhost:3000/text/send-file?to=Ahmet&filePath=C:\rapor.pdf&caption=Rapor`
 
 ---
 
@@ -75,6 +80,9 @@ node wa-cli.js ARA "toplantı"
 
 # Kişi ismiyle mesaj gönder
 node wa-cli.js "GONDER Ahmet Yılmaz | Merhaba!"
+
+# Kişi ismiyle dosya gönder
+node wa-cli.js "DOSYA Ahmet Yılmaz | C:\rapor.pdf | Rapor ektedir"
 ```
 
 ---
@@ -83,9 +91,10 @@ node wa-cli.js "GONDER Ahmet Yılmaz | Merhaba!"
 
 Gemini, OpenCode ve Claude içerisine otomatik tanımlanan `whatsapp` MCP sunucusu şu araçları sunar:
 
-- **`whatsapp_plain_text`**: `command` parametresine yukarıdaki düz metin komutlarından herhangi birini alır (`"MESAJLAR Ahmet Yılmaz"`, `"GONDER Ahmet | Merhaba"` vb.) ve düz metin döner.
+- **`whatsapp_plain_text`**: `command` parametresine yukarıdaki düz metin komutlarından herhangi birini alır (`"MESAJLAR Ahmet Yılmaz"`, `"GONDER Ahmet | Merhaba"`, `"DOSYA Ahmet | C:\\rapor.pdf | Rapor"` vb.) ve düz metin döner.
 - **`whatsapp_get_status`**: Bağlantı ve istatistik bilgisi.
 - **`whatsapp_send_message`**: `to` (kişi adı veya numara) ve `text` (mesaj).
+- **`whatsapp_send_file`**: `to` (kişi adı veya numara), `filePath` (dosya yolu veya URL) ve `caption` (açıklama) ile dosya/medya gönderir.
 - **`whatsapp_get_chats`**: Son sohbetler listesi.
 - **`whatsapp_get_messages`**: `chatId` (kişi adı veya numara) ile mesaj geçmişi.
 - **`whatsapp_search_messages`**: `query` ile mesaj arama.

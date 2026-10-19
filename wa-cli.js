@@ -88,7 +88,7 @@ async function main() {
   }
 
   if (
-    ['DURUM', 'SOHBETLER', 'MESAJLAR', 'OKU', 'SON_MESAJLAR', 'GELENLER', 'GONDER', 'GÖNDER', 'KISILER', 'KİŞİLER', 'REHBER', 'ARA', 'YARDIM', 'KILAVUZ', 'SENKRONIZE'].includes(upper)
+    ['DURUM', 'SOHBETLER', 'MESAJLAR', 'OKU', 'SON_MESAJLAR', 'GELENLER', 'GONDER', 'GÖNDER', 'DOSYA', 'DOSYA_GONDER', 'MEDYA', 'FILE', 'SEND_FILE', 'KISILER', 'KİŞİLER', 'REHBER', 'ARA', 'YARDIM', 'KILAVUZ', 'SENKRONIZE'].includes(upper)
   ) {
     const fullCmd = [cmd, arg1, ...rest].filter(Boolean).join(' ');
     const out = await request('POST', '/text', fullCmd, true);
@@ -117,6 +117,19 @@ async function main() {
         process.exit(1);
       }
       const res = await request('POST', '/api/send', { to, text });
+      console.log(JSON.stringify(res, null, 2));
+      break;
+    }
+    case 'send-file':
+    case 'file': {
+      const to = arg1;
+      const filePath = rest[0];
+      const caption = rest.slice(1).join(' ');
+      if (!to || !filePath) {
+        console.error('Kullanım: node wa-cli.js send-file <isim_veya_numara> <dosya_yolu_veya_url> [aciklama]');
+        process.exit(1);
+      }
+      const res = await request('POST', '/api/send-file', { to, filePath, caption });
       console.log(JSON.stringify(res, null, 2));
       break;
     }

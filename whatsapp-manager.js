@@ -1,4 +1,4 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const QRCode = require('qrcode');
 const qrcodeTerminal = require('qrcode-terminal');
 const EventEmitter = require('events');
@@ -1129,6 +1129,119 @@ class WhatsAppManager extends EventEmitter {
       recipientPhone: resolved.phone,
       messageId: sentMsg?.id?._serialized || saved?.id,
       text: String(text),
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Send file / media (image, PDF, document, audio, video, ZIP, etc.) by Contact Name or Phone Number.
+   * Supports:
+   * - Local file path (e.g. "C:\\rapor.pdf")
+   * - Remote URL (e.g. "https://example.com/file.pdf")
+   * - Base64 / Data URL object ({ base64, mimetype, filename }) from Web UI or API
+   */
+  async sendMedia(toOrName, mediaInput, caption = '', options = {}) {
+    if (this.status !== 'connected' || !this.client) {
+      throw new Error('WhatsApp henüz bağlı değil. Lütfen http://localhost:3000 adresinden QR kodu okutun.');
+    }
+    if (!mediaInput) {
+      throw new Error('Gönderilecek dosya yolu (filePath), URL veya base64 verisi gerekli.');
+    }
+
+    const resolved = this.resolveRecipient(toOrName);
+    let media = null;
+    let displayFilename = 'Dosya';
+
+    if (typeof mediaInput === 'string') {
+      const raw = mediaInput.trim().replace(/^["']|["']$/g, '');
+      if (/^https?:\/\//i.test(raw)) {
+        media = await MessageMedia.fromUrl(raw, { unsafeMime: true });
+        displayFilename = media.filename || path.basename(new URL(raw).pathname) || 'Dosya';
+      } else if (/^data:([^;]+);base64,(.+)$/i.test(raw)) {
+        const match = raw.match(/^data:([^;]+);base64,(.+)$/i);
+        displayFilename = options.filename || 'Dosya';
+        media = new MessageMedia(match[1], match[2], displayFilename);
+      } else {
+        const absPath = path.resolve(raw);
+        if (!fs.existsSync(absPath)) {
+          throw new Error(`Dosya bulunamadı: ${absPath}`);
+        }
+        media = MessageMedia.fromFilePath(absPath);
+        displayFilename = media.filename || path.basename(absPath);
+      }
+    } else if (typeof mediaInput === 'object') {
+      if (mediaInput.filePath) {
+        const cleanPath = String(mediaInput.filePath).trim().replace(/^["']|["']$/g, '');
+        const absPath = path.resolve(cleanPath);
+        if (!fs.existsSync(absPath)) {
+          throw new Error(`Dosya bulunamadı: ${absPath}`);
+        }
+        media = MessageMedia.fromFilePath(absPath);
+        displayFilename = mediaInput.filename || media.filename || path.basename(absPath);
+        if (mediaInput.filename) media.filename = mediaInput.filename;
+      } else if (mediaInput.url) {
+        media = await MessageMedia.fromUrl(String(mediaInput.url).trim(), { unsafeMime: true });
+        displayFilename = mediaInput.filename || media.filename || 'Dosya';
+        if (mediaInput.filename) media.filename = mediaInput.filename;
+      } else if (mediaInput.base64 || mediaInput.data) {
+        let b64 = String(mediaInput.base64 || mediaInput.data).trim();
+        let mime = mediaInput.mimetype || 'application/octet-stream';
+        const dataUrlMatch = b64.match(/^data:([^;]+);base64,(.+)$/i);
+        if (dataUrlMatch) {
+          mime = dataUrlMatch[1];
+          b64 = dataUrlMatch[2];
+        }
+        displayFilename = mediaInput.filename || 'Dosya';
+        media = new MessageMedia(mime, b64, displayFilename);
+      } else {
+        throw new Error('Geçersiz dosya parametresi: filePath, url veya base64 belirtilmelidir.');
+      }
+    }
+
+    const captionStr = caption ? String(caption).trim() : '';
+    const sendOpts = {};
+    if (captionStr) {
+      sendOpts.caption = captionStr;
+    }
+    if (options.replyToMessageId) {
+      sendOpts.quotedMessageId = options.replyToMessageId;
+    }
+
+    const isInlineMedia = /^(image|video|audio)\//i.test(media.mimetype || '');
+    if (options.sendAsDocument || !isInlineMedia) {
+      sendOpts.sendMediaAsDocument = true;
+    }
+
+    const sentMsg = await this.client.sendMessage(resolved.id, media, sendOpts);
+
+    const logText = captionStr
+      ? `[Dosya: ${displayFilename}] ${captionStr}`
+      : `[Dosya: ${displayFilename}]`;
+
+    const saved = this.ingestRawMessage({
+      id: sentMsg?.id?._serialized || `sent_media_${Date.now()}`,
+      chatId: resolved.id,
+      rawChatId: resolved.id,
+      chatName: resolved.name,
+      fromMe: true,
+      sender: this.user?.id || 'me',
+      senderName: this.user?.name || 'Ben',
+      type: 'document',
+      text: logText,
+      timestamp: Date.now()
+    });
+    this.scheduleSaveStore();
+    if (saved) this.emit('message', saved);
+
+    return {
+      success: true,
+      to: resolved.id,
+      recipientName: resolved.name,
+      recipientPhone: resolved.phone,
+      filename: displayFilename,
+      mimetype: media.mimetype,
+      caption: captionStr,
+      messageId: sentMsg?.id?._serialized || saved?.id,
       timestamp: new Date().toISOString()
     };
   }
