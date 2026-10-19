@@ -1,0 +1,22 @@
+# Bağımlılıklar
+node_modules/
+
+# Kişisel Veriler, Oturum ve Önbellek (Asla Git'e eklenmez)
+data/
+.wwebjs_auth/
+.wwebjs_cache/
+wwebjs_auth/
+wwebjs_cache/
+auth_info*/
+*store*.json
+*.session*
+
+# Ortam Değişkenleri ve Anahtarlar
+.env
+.env.*
+
+# Log ve Sistem Dosyaları
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db

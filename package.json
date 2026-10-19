@@ -1,0 +1,37 @@
+{
+  "name": "whatsapp-ai-api",
+  "version": "2.0.0",
+  "description": "Persistent WhatsApp Plain-Text AI Backend, REST API & MCP Server for Gemini, OpenCode, Claude, and all AI Agents",
+  "main": "server.js",
+  "bin": {
+    "wa-cli": "./wa-cli.js",
+    "whatsapp-mcp": "./mcp-server.js"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "mcp": "node mcp-server.js",
+    "cli": "node wa-cli.js",
+    "setup-ai": "node setup-ai-configs.js",
+    "test": "node test-api.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "ai",
+    "mcp",
+    "model-context-protocol",
+    "plain-text",
+    "gemini",
+    "opencode",
+    "claude",
+    "whatsapp-api"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.34.7",
+    "ws": "^8.18.0"
+  }
+}

@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WhatsApp AI API & MCP Kontrol Paneli (Kalıcı Oturum)</title>
+  <style>
+    :root {
+      --bg: #0b141a;
+      --card: #111b21;
+      --card-border: #222e35;
+      --text: #e9edef;
+      --muted: #8696a0;
+      --green: #00a884;
+      --green-hover: #06cf9c;
+      --danger: #f15c6d;
+      --warning: #f59e0b;
+      --code-bg: #080e12;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 24px;
+    }
+    .container {
+      max-width: 1260px;
+      margin: 0 auto;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      padding: 18px 24px;
+      border-radius: 14px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .brand-icon {
+      width: 46px;
+      height: 46px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #00a884, #02735e);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      box-shadow: 0 4px 16px rgba(0, 168, 132, 0.3);
+    }
+    .brand h1 {
+      font-size: 20px;
+      font-weight: 700;
+    }
+    .brand p {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 14px;
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--warning);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+    }
+    .status-badge.connected {
+      background: rgba(0, 168, 132, 0.18);
+      color: #06cf9c;
+      border-color: rgba(0, 168, 132, 0.45);
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 1.6s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 390px 1fr;
+      gap: 24px;
+    }
+    @media (max-width: 920px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 22px;
+      margin-bottom: 24px;
+    }
+    .card h2 {
+      font-size: 17px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .qr-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #182229;
+      border: 1px dashed #2a3942;
+      border-radius: 12px;
+      padding: 20px;
+      min-height: 310px;
+      text-align: center;
+    }
+    .qr-box img {
+      width: 260px;
+      height: 260px;
+      border-radius: 10px;
+      background: #fff;
+      padding: 8px;
+      margin-bottom: 12px;
+    }
+    .user-info {
+      width: 100%;
+      text-align: left;
+      background: #182229;
+      padding: 16px;
+      border-radius: 10px;
+      margin-top: 10px;
+    }
+    .user-info div {
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    .user-info span {
+      color: var(--muted);
+    }
+    .btn {
+      background: var(--green);
+      color: #fff;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 14px;
+      transition: 0.15s;
+    }
+    .btn:hover { background: var(--green-hover); }
+    .btn-danger {
+      background: rgba(241, 92, 109, 0.16);
+      color: var(--danger);
+      border: 1px solid rgba(241, 92, 109, 0.35);
+    }
+    .btn-danger:hover {
+      background: var(--danger);
+      color: #fff;
+    }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+    .form-group {
+      margin-bottom: 14px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .form-group input, .form-group textarea {
+      width: 100%;
+      background: #182229;
+      border: 1px solid #2a3942;
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+    .form-group textarea {
+      resize: vertical;
+      min-height: 76px;
+    }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      background: #182229;
+      color: var(--muted);
+      border: 1px solid #2a3942;
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .tab-btn.active {
+      background: var(--green);
+      color: #fff;
+      border-color: var(--green);
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid #222e35;
+      padding: 14px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 12.5px;
+      color: #a5f3fc;
+      position: relative;
+      margin-top: 8px;
+    }
+    .msg-list {
+      max-height: 320px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .msg-item {
+      background: #182229;
+      border-left: 3px solid var(--green);
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .msg-item.outgoing {
+      border-left-color: #38bdf8;
+    }
+    .msg-meta {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 11.5px;
+      margin-bottom: 4px;
+    }
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .stat-pill {
+      background: #182229;
+      padding: 10px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .stat-pill strong {
+      display: block;
+      font-size: 18px;
+      color: var(--green-hover);
+    }
+    .stat-pill span {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .contact-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 8px;
+      max-height: 240px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+    .contact-chip {
+      background: #182229;
+      border: 1px solid #2a3942;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      cursor: pointer;
+      transition: 0.15s;
+    }
+    .contact-chip:hover {
+      border-color: var(--green);
+      background: #1f2c34;
+    }
+    .contact-chip strong {
+      display: block;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .contact-chip span {
+      color: var(--muted);
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <div class="brand-icon">💬</div>
+        <div>
+          <h1>WhatsApp AI API & MCP Köprüsü (Kalıcı Oturum)</h1>
+          <p>Gemini • OpenCode • Claude • Kişi İsmiyle Mesaj Gönderme & Tam Mesaj Geçmişi</p>
+        </div>
+      </div>
+      <div id="statusBadge" class="status-badge">
+        <span class="dot"></span>
+        <span id="statusText">Bağlantı Kontrol Ediliyor...</span>
+      </div>
+    </header>
+
+    <div class="grid">
+      <!-- Sol Sütun: QR Kod & Hızlı Mesaj -->
+      <div>
+        <div class="card">
+          <h2>
+            <span>📱 Kalıcı WhatsApp Oturumu</span>
+            <button class="btn btn-danger btn-sm" onclick="resetSession()">Yeni QR / Çıkış</button>
+          </h2>
+          <div id="qrContainer" class="qr-box">
+            <p style="color: var(--muted);">Durum kontrol ediliyor...</p>
+          </div>
+          <div class="stats-row">
+            <div class="stat-pill">
+              <strong id="statChats">0</strong>
+              <span>Sohbet</span>
+            </div>
+            <div class="stat-pill">
+              <strong id="statContacts">0</strong>
+              <span>Kayıtlı Kişi</span>
+            </div>
+            <div class="stat-pill">
+              <strong id="statMessages">0</strong>
+              <span>Mesaj Hafızası</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>🚀 İsimle veya Numarayla Mesaj Gönder</h2>
+          <form onsubmit="sendTestMessage(event)">
+            <div class="form-group">
+              <label>Kişi İsmi veya Telefon Numarası (Örn: Ahmet Yılmaz, Ayşe Demir, 0555...)</label>
+              <input type="text" id="toInput" list="contactsDatalist" placeholder="Kişi adı veya numara yazın..." required />
+              <datalist id="contactsDatalist"></datalist>
+            </div>
+            <div class="form-group">
+              <label>Mesajınız</label>
+              <textarea id="textInput" placeholder="Merhaba, bu mesaj WhatsApp AI API üzerinden gönderildi!" required></textarea>
+            </div>
+            <button type="submit" class="btn" style="width: 100%;">Mesajı Gönder</button>
+            <p id="sendResult" style="margin-top: 10px; font-size: 13px;"></p>
+          </form>
+        </div>
+      </div>
+
+      <!-- Sağ Sütun: Mesajlar, Kişiler & AI Entegrasyonu -->
+      <div>
+        <div class="card">
+          <h2>
+            <span>📨 Mesaj Geçmişi & Gelen Mesajlar</span>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <input type="text" id="chatFilterInput" placeholder="Kişi adıyla geçmiş getir..." style="background:#182229;border:1px solid #2a3942;color:#fff;padding:5px 10px;border-radius:6px;font-size:12px;" />
+              <button class="btn btn-sm" onclick="fetchMessages()">Geçmişi Getir</button>
+              <button class="btn btn-sm" style="background:#2a3942;" onclick="clearChatFilter()">Tümünü Gör</button>
+              <button class="btn btn-sm" style="background:#02735e;" onclick="triggerSync()">🔄 Senkronize Et</button>
+            </div>
+          </h2>
+          <div id="msgList" class="msg-list">
+            <p style="color: var(--muted); font-size: 13px;">Yükleniyor...</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>
+            <span>👥 Rehberdeki Kişiler & Gruplar (Tıklayınca Geçmişi Açar)</span>
+            <input type="text" id="contactSearchInput" oninput="fetchContacts()" placeholder="İsim veya numara ara..." style="background:#182229;border:1px solid #2a3942;color:#fff;padding:5px 10px;border-radius:6px;font-size:12px;width:200px;" />
+          </h2>
+          <div id="contactList" class="contact-grid">
+            <p style="color: var(--muted); font-size: 13px;">Kişiler yükleniyor...</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>
+            <span>📝 Plain-Text (Düz Metin) AI Komut Konsolu (Canlı Test)</span>
+            <a href="/ai.txt" target="_blank" class="btn btn-sm" style="text-decoration:none;">📖 Tam Kılavuz (/ai.txt)</a>
+          </h2>
+          <p style="font-size: 12.5px; color: var(--muted); margin-bottom: 10px;">
+            Yapay zekalar <code>POST http://localhost:3000/text</code> adresine aşağıdaki gibi düz metin gönderip düz metin yanıt alır:
+          </p>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;">
+            <button class="btn btn-sm" style="background:#182229;border:1px solid #2a3942;" onclick="runPlainCmd('DURUM')">DURUM</button>
+            <button class="btn btn-sm" style="background:#182229;border:1px solid #2a3942;" onclick="runPlainCmd('SOHBETLER 15')">SOHBETLER 15</button>
+            <button class="btn btn-sm" style="background:#182229;border:1px solid #2a3942;" onclick="runPlainCmd('MESAJLAR Ahmet Yılmaz')">MESAJLAR Ahmet Yılmaz</button>
+            <button class="btn btn-sm" style="background:#182229;border:1px solid #2a3942;" onclick="runPlainCmd('KISILER Ayşe')">KISILER Ayşe</button>
+            <button class="btn btn-sm" style="background:#182229;border:1px solid #2a3942;" onclick="runPlainCmd('YARDIM')">YARDIM (Kılavuz)</button>
+          </div>
+          <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+            <input type="text" id="plainCmdInput" value="SOHBETLER 10" placeholder="Örn: MESAJLAR Ahmet Yılmaz veya GONDER Ahmet | Merhaba" style="flex:1;background:#182229;border:1px solid #2a3942;color:#fff;padding:8px 12px;border-radius:8px;font-size:13px;" />
+            <button class="btn" onclick="runPlainCmd()">Çalıştır</button>
+          </div>
+          <pre id="plainCmdOutput" style="max-height: 240px; overflow-y: auto; white-space: pre-wrap;">Komut çıktısı burada düz metin (plain text) olarak görünecek...</pre>
+        </div>
+
+        <div class="card">
+          <h2>🤖 Yapay Zekalar İçin Kullanım Kılavuzu (Gemini, OpenCode, Claude)</h2>
+          <p style="font-size: 12.5px; color: var(--muted); margin-bottom: 8px;">
+            Herhangi bir yapay zekaya şu talimatı kopyalayıp yapıştırmanız yeterlidir:
+          </p>
+          <pre style="color:#86efac;">"Bilgisayarımda http://localhost:3000 adresinde WhatsApp AI API çalışıyor.
+Önce http://localhost:3000/ai.txt adresindeki düz metin kullanım kılavuzunu oku.
+Ardından http://localhost:3000/text adresine düz metin komutları göndererek
+(veya tanımlı whatsapp MCP aracını kullanarak) WhatsApp mesajlarımı yönet."</pre>
+          <pre>• DURUM                           -> Bağlantı ve hesap bilgisi
+• SOHBETLER 20                    -> Son 20 konuşmayı ve son mesajları listeler
+• MESAJLAR Ahmet Yılmaz           -> Ahmet Yılmaz ile olan mesaj geçmişini getirir
+• GONDER Ahmet | Merhaba!         -> Ahmet'e doğrudan isimle mesaj gönderir
+• KISILER Ayşe                    -> Rehberde Ayşe isimli kişileri ve numaralarını bulur
+• ARA toplantı                    -> Mesaj geçmişinde 'toplantı' kelimesini arar</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function runPlainCmd(preset) {
+      const inputEl = document.getElementById('plainCmdInput');
+      if (preset) inputEl.value = preset;
+      const cmd = inputEl.value.trim();
+      const outEl = document.getElementById('plainCmdOutput');
+      outEl.textContent = 'Çalıştırılıyor...';
+      try {
+        const res = await fetch('/text', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+          body: cmd
+        });
+        outEl.textContent = await res.text();
+      } catch (err) {
+        outEl.textContent = 'Hata: ' + err.message;
+      }
+    }
+    function renderStatus(st) {
+      const badge = document.getElementById('statusBadge');
+      const statusText = document.getElementById('statusText');
+      const qrBox = document.getElementById('qrContainer');
+
+      if (st.stats) {
+        document.getElementById('statChats').textContent = st.stats.totalChats || 0;
+        document.getElementById('statContacts').textContent = st.stats.totalContacts || 0;
+        document.getElementById('statMessages').textContent = st.stats.cachedMessages || 0;
+      }
+
+      if (st.connected) {
+        badge.classList.add('connected');
+        statusText.textContent = `Kalıcı Bağlı: ${st.user?.name || ''} (+${st.user?.phone || ''})`;
+        qrBox.innerHTML = `
+          <div style="font-size: 54px; margin-bottom: 10px;">✅</div>
+          <h3 style="color: #06cf9c; margin-bottom: 6px;">Kalıcı WhatsApp Oturumu Aktif!</h3>
+          <p style="color: var(--muted); font-size: 13px; margin-bottom: 12px;">
+            Oturumunuz bilgisayarınıza kalıcı olarak kaydedildi. Tekrar QR okutmanıza gerek yoktur.
+          </p>
+          <div class="user-info">
+            <div><span>Hesap Adı:</span> <strong>${escapeHtml(st.user?.name || '-')}</strong></div>
+            <div><span>Telefon:</span> <strong>+${escapeHtml(st.user?.phone || '-')}</strong></div>
+            <div><span>Kalıcı Oturum:</span> <strong style="color:#06cf9c;">Aktif (AppData LocalAuth)</strong></div>
+          </div>
+        `;
+      } else if (st.status === 'authenticated') {
+        badge.classList.add('connected');
+        statusText.textContent = 'Kimlik Doğrulandı, Sohbetler Yükleniyor...';
+        qrBox.innerHTML = `
+          <div style="font-size: 48px; margin-bottom: 10px;">🔐</div>
+          <h3 style="color: #06cf9c; margin-bottom: 6px;">Oturum Doğrulandı!</h3>
+          <p style="color: var(--muted); font-size: 13px;">Sohbet geçmişiniz ve kişileriniz senkronize ediliyor, birkaç saniye bekleyin...</p>
+        `;
+      } else if (st.qrAvailable && st.qrDataUrl) {
+        badge.classList.remove('connected');
+        statusText.textContent = 'QR Kod Okutulması Bekleniyor (Sadece 1 Kez)...';
+        qrBox.innerHTML = `
+          <img src="${escapeHtml(st.qrDataUrl)}" alt="WhatsApp QR Code" />
+          <p style="font-weight: 600; margin-bottom: 4px;">Kalıcı Giriş İçin QR Kodu Okutun</p>
+          <p style="font-size: 12px; color: var(--muted);">
+            1 kez okuttuktan sonra normal bilgisayarınızdaki gibi kalıcı olarak açık kalır.
+          </p>
+        `;
+      } else {
+        badge.classList.remove('connected');
+        statusText.textContent = 'WhatsApp Motoru Hazırlanıyor...';
+        qrBox.innerHTML = `
+          <p style="color: var(--muted);">Kalıcı WhatsApp Web motoru başlatılıyor, lütfen birkaç saniye bekleyin...</p>
+        `;
+      }
+    }
+
+    function renderMessages(messages) {
+      const container = document.getElementById('msgList');
+      if (!messages || messages.length === 0) {
+        container.innerHTML = '<p style="color: var(--muted); font-size: 13px;">Bu sohbette henüz mesaj bulunamadı.</p>';
+        return;
+      }
+      const recent = [...messages].reverse().slice(0, 50);
+      container.innerHTML = recent.map(m => {
+        const displayChat = m.chatName || m.senderName || m.chatId;
+        const headerLabel = m.fromMe
+          ? `➡️ Siz → ${escapeHtml(displayChat)}`
+          : `⬅️ ${escapeHtml(m.senderName || displayChat)} (${escapeHtml(displayChat)})`;
+        return `
+          <div class="msg-item ${m.fromMe ? 'outgoing' : ''}">
+            <div class="msg-meta">
+              <strong>${headerLabel}</strong>
+              <span>${new Date(m.timestamp).toLocaleString('tr-TR')}</span>
+            </div>
+            <div>${escapeHtml(m.text || '')}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function selectContact(name) {
+      document.getElementById('toInput').value = name;
+      document.getElementById('chatFilterInput').value = name;
+      fetchMessages();
+    }
+
+    function clearChatFilter() {
+      document.getElementById('chatFilterInput').value = '';
+      fetchMessages();
+    }
+
+    async function triggerSync() {
+      const container = document.getElementById('msgList');
+      container.innerHTML = '<p style="color: #06cf9c; font-size: 13px;">🔄 WhatsApp geçmiş mesajlar ve kişiler senkronize ediliyor...</p>';
+      await fetch('/api/sync', { method: 'POST' });
+      await fetchStatus();
+      await fetchContacts();
+      await fetchMessages();
+    }
+
+    async function fetchContacts() {
+      try {
+        const q = document.getElementById('contactSearchInput').value.trim();
+        const res = await fetch('/api/contacts?limit=80&search=' + encodeURIComponent(q));
+        const data = await res.json();
+        const listEl = document.getElementById('contactList');
+        const dl = document.getElementById('contactsDatalist');
+
+        if (!data.contacts || data.contacts.length === 0) {
+          listEl.innerHTML = '<p style="color: var(--muted); font-size: 13px;">Kişi bulunamadı.</p>';
+          return;
+        }
+
+        dl.innerHTML = data.contacts.map(c => {
+          const phoneLabel = c.isGroup || c.phone === 'Grup' ? 'Grup Sohbeti' : '+' + (c.phone || '');
+          return `<option value="${escapeHtml(c.name)}">${escapeHtml(phoneLabel)}</option>`;
+        }).join('');
+
+        listEl.innerHTML = data.contacts.map(c => {
+          const icon = c.isGroup || c.phone === 'Grup' ? '👥' : '👤';
+          const phoneLabel = c.isGroup || c.phone === 'Grup' ? 'Grup Sohbeti' : '+' + (c.phone || '');
+          return `
+            <div class="contact-chip" data-name="${escapeHtml(c.name)}" onclick="selectContact(this.dataset.name)">
+              <strong>${icon} ${escapeHtml(c.name)}</strong>
+              <span>${escapeHtml(phoneLabel)}</span>
+            </div>
+          `;
+        }).join('');
+      } catch (e) {}
+    }
+
+    async function fetchStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        renderStatus(data);
+      } catch (e) {}
+    }
+
+    async function fetchMessages() {
+      try {
+        const chatFilter = document.getElementById('chatFilterInput').value.trim();
+        const url = chatFilter
+          ? '/api/messages?limit=50&chatId=' + encodeURIComponent(chatFilter)
+          : '/api/messages?limit=50';
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.messages) renderMessages(data.messages);
+      } catch (e) {}
+    }
+
+    async function sendTestMessage(e) {
+      e.preventDefault();
+      const to = document.getElementById('toInput').value.trim();
+      const text = document.getElementById('textInput').value.trim();
+      const out = document.getElementById('sendResult');
+      out.style.color = 'var(--muted)';
+      out.textContent = 'Gönderiliyor...';
+
+      try {
+        const res = await fetch('/api/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to, text })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          out.style.color = '#06cf9c';
+          out.textContent = `✅ "${data.recipientName}" (+${data.recipientPhone}) kişisine mesaj gönderildi!`;
+          document.getElementById('textInput').value = '';
+          fetchMessages();
+        } else {
+          out.style.color = 'var(--danger)';
+          out.textContent = '❌ Hata: ' + data.error;
+        }
+      } catch (err) {
+        out.style.color = 'var(--danger)';
+        out.textContent = '❌ Bağlantı hatası: ' + err.message;
+      }
+    }
+
+    async function resetSession() {
+      if (!confirm('Kalıcı WhatsApp oturumunu kapatıp yeni QR kod oluşturmak istiyor musunuz?')) return;
+      await fetch('/api/logout', { method: 'POST' });
+      setTimeout(fetchStatus, 1000);
+    }
+
+    function connectWs() {
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const ws = new WebSocket(`${proto}://${location.host}/ws`);
+      ws.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.event === 'status') {
+            renderStatus(msg.data);
+            fetchContacts();
+          }
+          if (msg.event === 'qr') fetchStatus();
+          if (msg.event === 'recent_messages') renderMessages(msg.data);
+          if (msg.event === 'message') {
+            fetchMessages();
+            fetchStatus();
+          }
+        } catch (e) {}
+      };
+      ws.onclose = () => setTimeout(connectWs, 3000);
+    }
+
+    fetchStatus();
+    fetchMessages();
+    fetchContacts();
+    connectWs();
+    setInterval(fetchStatus, 4000);
+  </script>
+</body>
+</html>
