@@ -1,50 +1,50 @@
 # 💬 WhatsApp AI API & MCP Bridge
 
 <p align="center">
-  <img src="https://img.shields.io/badge/WhatsApp-Web_Kal%C4%B1c%C4%B1_Oturum-25D366?style=for-the-badge&logo=whatsapp&logoColor=white" alt="WhatsApp" />
+  <img src="https://img.shields.io/badge/WhatsApp-Persistent_Web_Session-25D366?style=for-the-badge&logo=whatsapp&logoColor=white" alt="WhatsApp" />
   <img src="https://img.shields.io/badge/AI_Backend-Plain_Text_%26_MCP-00a884?style=for-the-badge" alt="Plain Text & MCP" />
   <img src="https://img.shields.io/badge/Node.js-18%2B-339933?style=for-the-badge&logo=nodedotjs&logoColor=white" alt="Node.js" />
   <img src="https://img.shields.io/badge/OpenAPI-3.1-6BA539?style=for-the-badge&logo=openapiinitiative&logoColor=white" alt="OpenAPI 3.1" />
-  <img src="https://img.shields.io/badge/G%C3%BCvenlik-Localhost_Only-38bdf8?style=for-the-badge" alt="Security" />
+  <img src="https://img.shields.io/badge/Security-Localhost_Only-38bdf8?style=for-the-badge" alt="Security" />
 </p>
 
-> **Gemini (Antigravity / CLI)**, **OpenCode**, **Claude Code / Claude Desktop**, **Cursor** ve diğer tüm yapay zeka ajanlarının masaüstünüzdeki **WhatsApp** hesabınızla **Düz Metin (`text/plain`)**, **Model Context Protocol (MCP)** ve **REST API** üzerinden güvenle iletişim kurmasını sağlayan yerel köprü yazılımı.
+> A local **WhatsApp AI API, Plain-Text (`text/plain`) Backend, and Model Context Protocol (MCP) Bridge** that lets AI agents (**Gemini / Antigravity**, **OpenCode**, **Claude Code / Claude Desktop**, **Cursor**, **Custom Scripts**) read message history, search contacts, and send WhatsApp messages by contact name or phone number over a persistent desktop session.
 
 ---
 
-## ✨ Öne Çıkan Özellikler
+## ✨ Key Features
 
-- 🔐 **Tek Seferlik QR & Kalıcı Oturum (`LocalAuth`)**: QR kodu yalnızca bir kez okutmanız yeterlidir. Oturum verileri kod klasörüne değil, işletim sisteminizin güvenli yerel uygulama dizinine (`%LOCALAPPDATA%\WhatsApp-AI-API`) kaydedilir.
-- 📝 **Plain-Text (`text/plain`) AI Backend**: Yapay zeka modelleri karmaşık JSON şemalarıyla uğraşmadan doğrudan `POST /text` adresine `"MESAJLAR Ahmet Yılmaz"` veya `"GONDER Ahmet Yılmaz | Merhaba!"` şeklinde düz metin gönderip düz metin yanıt alabilir.
-- 👤 **Kişi İsmiyle Mesajlaşma & LID Çözümleyici**: WhatsApp Web'in yeni `@lid` kimliklerini gerçek telefon numaralarıyla (`@c.us`) otomatik eşleştirir. Rehberinizdeki kişilere doğrudan kayıtlı isimleriyle mesaj gönderebilir ve geçmiş mesajları okuyabilirsiniz.
-- 🧠 **Tam MCP (Model Context Protocol) Desteği**: Hem `stdio` (`mcp-server.js`) hem de Streamable HTTP/SSE (`http://localhost:3000/mcp`) protokollerini destekler.
-- 🛡️ **Yerel Güvenlik Mimarisi**:
-  - Sunucu varsayılan olarak yalnızca `127.0.0.1` (yerel bilgisayar) adresini dinler; dış ağdan erişilemez.
-  - Sıkı CORS politikası ile yalnızca `localhost` kaynaklı tarayıcı isteklerine izin verir.
-  - Opsiyonel `WA_API_KEY` ortam değişkeni ile anahtar tabanlı kimlik doğrulaması sunar.
-  - Kişisel oturum ve mesaj önbelleği kod dizini dışında (`%LOCALAPPDATA%\WhatsApp-AI-API`) tutulur.
+- 🔐 **One-Time QR & Persistent Session (`LocalAuth`)**: Scan the QR code once and stay logged in permanently like WhatsApp Desktop. Session data and message cache are stored securely in your OS user directory (`%LOCALAPPDATA%\WhatsApp-AI-API`), completely outside the project repository.
+- 📝 **Plain-Text (`text/plain`) AI Backend**: AI agents can interact with WhatsApp without complex JSON parsing by sending plain-text commands to `POST /text` (e.g., `MESSAGES John Doe` or `SEND John Doe | Hello!`) and receiving clean plain-text responses.
+- 👤 **Smart Contact Name & LID Resolver**: Automatically maps WhatsApp Web's internal `@lid` identifiers to real `@c.us` phone numbers. Send messages or fetch chat history directly by contact name or phone number.
+- 🧠 **Full MCP (Model Context Protocol) Support**: Built-in support for both `stdio` (`mcp-server.js`) and Streamable HTTP/SSE (`http://localhost:3000/mcp`).
+- 🛡️ **Local-First Security Architecture**:
+  - Binds strictly to `127.0.0.1` (localhost) by default — inaccessible from external network devices.
+  - Strict CORS policy restricting browser requests to `localhost` origins only.
+  - Optional `WA_API_KEY` authentication (`X-API-Key` or `Authorization: Bearer <KEY>`).
+  - Zero personal data or session files stored inside the code directory.
 
 ---
 
-## 🏗️ Mimari
+## 🏗️ Architecture
 
 ```mermaid
 flowchart LR
-    subgraph AI["🤖 Yapay Zeka Ajanları"]
+    subgraph AI["🤖 AI Agents & Clients"]
         G["Gemini / Antigravity"]
         O["OpenCode"]
         C["Claude Code / Desktop"]
-        W["cURL / Python / Script"]
+        W["cURL / Python / Scripts"]
     end
 
     subgraph Bridge["⚡ WhatsApp AI API (127.0.0.1:3000)"]
-        PT["📝 Plain-Text Katmanı (/text & /ai.txt)"]
-        MCP["🧠 MCP Sunucusu (/mcp & mcp-server.js)"]
+        PT["📝 Plain-Text Layer (/text & /ai.txt)"]
+        MCP["🧠 MCP Server (/mcp & mcp-server.js)"]
         REST["🔌 JSON REST API (/api/*)"]
-        UI["🌐 Web Kontrol Paneli (/)"]
+        UI["🌐 Web Control Panel (/)"]
     end
 
-    subgraph Engine["📱 Kalıcı WhatsApp Motoru"]
+    subgraph Engine["📱 Persistent WhatsApp Engine"]
         WA["WhatsApp Web (Chrome LocalAuth)"]
         DB[("💾 %LOCALAPPDATA%\\WhatsApp-AI-API")]
     end
@@ -61,9 +61,9 @@ flowchart LR
 
 ---
 
-## 🚀 Kurulum ve Başlatma
+## 🚀 Quick Start
 
-### 1. Bağımlılıkları Yükleyin
+### 1. Install Dependencies
 
 ```bash
 git clone https://github.com/ze-nox-studio/whatsapp-ai-api.git
@@ -71,19 +71,19 @@ cd whatsapp-ai-api
 npm install
 ```
 
-### 2. Sunucuyu Başlatın
+### 2. Start the Server
 
-Windows'ta **`Baslat.bat`** dosyasına çift tıklayın (veya arka planda penceresiz çalıştırmak için **`ArkaPlandaBaslat.vbs`** dosyasını açın):
+Run the server (or double-click **`Baslat.bat`** on Windows, or **`ArkaPlandaBaslat.vbs`** for silent background mode):
 
 ```bash
 npm start
 ```
 
-Tarayıcınızda **[http://localhost:3000](http://localhost:3000)** adresini açın ve ekrandaki QR kodu telefonunuzdan (*WhatsApp > Ayarlar > Bağlı Cihazlar > Cihaz Bağla*) bir kez okutun.
+Open **[http://localhost:3000](http://localhost:3000)** in your browser and scan the **QR Code** once from your phone (*WhatsApp > Settings > Linked Devices > Link a Device*).
 
-### 3. Yapay Zeka Araçlarına Otomatik Tanıtın (Opsiyonel)
+### 3. Auto-Configure AI Agents (Optional)
 
-Bilgisayarınızdaki **Gemini**, **OpenCode**, **Claude Code** ve **Claude Desktop** yapılandırmalarına MCP sunucusunu tek komutla eklemek için:
+Automatically register the `whatsapp` MCP server in **Gemini**, **OpenCode**, **Claude Code**, and **Claude Desktop**:
 
 ```bash
 npm run setup-ai
@@ -91,87 +91,102 @@ npm run setup-ai
 
 ---
 
-## 📝 Düz Metin (Plain-Text) AI İletişim Protokolü
+## 📝 Plain-Text AI Protocol (`POST /text` & `GET /text`)
 
-Herhangi bir yapay zekaya şu talimatı (prompt) vermeniz yeterlidir:
+Give any AI agent this simple prompt:
 
-> *"Bilgisayarımda `http://localhost:3000` adresinde WhatsApp AI API çalışıyor. Önce `http://localhost:3000/ai.txt` adresindeki düz metin kılavuzunu oku, ardından `http://localhost:3000/text` üzerinden düz metin komutlarıyla WhatsApp mesajlarımı yönet."*
+> *"A WhatsApp AI API is running locally at `http://localhost:3000`. First read the plain-text guide at `http://localhost:3000/ai.txt`, then manage my WhatsApp messages by sending plain-text commands to `http://localhost:3000/text`."*
 
-### Komut Tablosu (`POST http://localhost:3000/text` veya `GET /text?cmd=...`)
+### Supported Commands (English & Turkish Aliases)
 
-| Komut | Açıklama | Örnek Kullanım |
-| :--- | :--- | :--- |
-| `DURUM` | Bağlantı durumunu, bağlı hesabı ve istatistikleri döndürür | `DURUM` |
-| `SOHBETLER [limit] [arama]` | Son konuşulan kişileri, grupları ve son mesajları listeler | `SOHBETLER 20` veya `SOHBETLER 10 Proje` |
-| `MESAJLAR <Kişi Adı veya Tel> \| [limit]` | Belirtilen kişi veya grupla olan mesaj geçmişini getirir | `MESAJLAR Ahmet Yılmaz \| 40` |
-| `SON_MESAJLAR [limit]` | Tüm sohbetlerdeki son gelen/giden mesajları listeler | `SON_MESAJLAR 25` |
-| `GELENLER [limit]` | Sadece karşı taraftan gelen son mesajları listeler | `GELENLER 20` |
-| `GONDER <Kişi Adı veya Tel> \| <Mesaj>` | Rehberdeki kişi ismini veya numarayı bulup mesajı gönderir | `GONDER Ahmet Yılmaz \| Merhaba!` |
-| `KISILER [arama]` | Rehberdeki kişileri gerçek telefon numaralarıyla (`+905...`) listeler | `KISILER Ayşe` |
-| `ARA <kelime>` | Tüm mesaj geçmişinde kelime araması yapar | `ARA toplantı` |
-| `SENKRONIZE` | WhatsApp Web üzerinden tüm kişileri ve geçmişi günceller | `SENKRONIZE` |
-| `YARDIM` | Yapay zeka kullanım kılavuzunu düz metin olarak döndürür | `YARDIM` |
-
----
-
-## 🌐 HTTP Uç Noktaları (Endpoints)
-
-### Düz Metin (`text/plain`) Uç Noktaları
-- `GET  /ai.txt` (veya `/llms.txt`) — Yapay zekalar için canlı düz metin kullanım kılavuzu
-- `POST /text` — Gövdede (`text/plain`) düz metin komutu çalıştırır
-- `GET  /text?cmd=...` — URL parametresiyle düz metin komutu çalıştırır
-- `GET  /text/status` — Düz metin bağlantı durumu
-- `GET  /text/chats?limit=25` — Düz metin son sohbetler
-- `GET  /text/messages/:chat?limit=40` — Kişi adıyla veya numarayla düz metin mesaj geçmişi
-- `POST /text/send` — Gövdede `Kişi Adı | Mesaj` ile düz metin mesaj gönderimi
-- `GET  /text/contacts/:search` — Rehberde kişi arama
-- `GET  /text/search/:query` — Mesaj geçmişinde kelime arama
-
-### JSON REST API & MCP Uç Noktaları
-- `GET  /api/status` — Bağlantı durumu ve istatistikler
-- `GET  /api/chats` — Sohbet listesi (`?limit=30&search=...`)
-- `GET  /api/messages` — Mesaj geçmişi (`?chatId=Ahmet%20Yılmaz&limit=40`)
-- `POST /api/send` — Mesaj gönderimi (`{ "to": "Ahmet Yılmaz", "text": "Merhaba!" }`)
-- `GET  /api/contacts` — Kişi listesi (`?search=Ahmet`)
-- `GET  /api/search` — Mesaj arama (`?query=toplantı`)
-- `POST /mcp` — Model Context Protocol (JSON-RPC 2.0) HTTP uç noktası
-- `GET  /openapi.json` — OpenAPI 3.1 şeması
+| Command | Alias | Description | Example |
+| :--- | :--- | :--- | :--- |
+| `STATUS` | `DURUM` | Check connection status, active account, and stats | `STATUS` |
+| `CHATS [limit] [search]` | `SOHBETLER` | List recent conversations, groups, and last messages | `CHATS 20` or `CHATS 10 Project` |
+| `MESSAGES <Name or Phone> \| [limit]` | `MESAJLAR`, `OKU` | Fetch full message history with a contact or group | `MESSAGES Ahmet Yilmaz \| 40` |
+| `RECENT [limit]` | `SON_MESAJLAR` | List the most recent messages across all chats | `RECENT 25` |
+| `SEND <Name or Phone> \| <Message>` | `GONDER`, `YAZ` | Resolve contact name or number and send a message | `SEND Ahmet Yilmaz \| Hello!` |
+| `CONTACTS [search]` | `KISILER`, `REHBER` | List or search contacts with real phone numbers | `CONTACTS Ayse` |
+| `SEARCH <keyword>` | `ARA` | Search message history by keyword | `SEARCH meeting` |
+| `SYNC` | `SENKRONIZE` | Force a full sync of contacts, chats, and history | `SYNC` |
+| `HELP` | `YARDIM`, `GUIDE` | Return the plain-text AI usage guide | `HELP` |
 
 ---
 
-## 💻 Komut Satırı (CLI) Kullanımı
+## 🌐 HTTP Endpoints
+
+### Plain-Text (`text/plain`) Endpoints
+- `GET  /ai.txt` (or `/llms.txt`) — Live plain-text AI usage guide
+- `POST /text` — Execute a plain-text command sent in the request body (`text/plain`)
+- `GET  /text?cmd=...` — Execute a plain-text command via query parameter
+- `GET  /text/status` — Plain-text connection status
+- `GET  /text/chats?limit=25` — Plain-text recent chats list
+- `GET  /text/messages/:chat?limit=40` — Plain-text message history by contact name or phone number
+- `POST /text/send` — Send a message using `Contact Name | Message` in plain-text body
+- `GET  /text/contacts/:search` — Search contacts in plain text
+- `GET  /text/search/:query` — Search messages in plain text
+
+### JSON REST API & MCP Endpoints
+- `GET  /api/status` — Connection status and session stats
+- `GET  /api/chats` — List recent chats (`?limit=30&search=...`)
+- `GET  /api/messages` — Fetch messages (`?chatId=Ahmet%20Yilmaz&limit=40`)
+- `POST /api/send` — Send a message (`{ "to": "Ahmet Yilmaz", "text": "Hello!" }`)
+- `GET  /api/contacts` — List or search contacts (`?search=Ahmet`)
+- `GET  /api/search` — Search message history (`?query=meeting`)
+- `POST /mcp` — Model Context Protocol (JSON-RPC 2.0) HTTP endpoint
+- `GET  /openapi.json` — OpenAPI 3.1 specification
+
+---
+
+## 🛠️ MCP Tools
+
+When connected via MCP (`mcp-server.js` or `http://localhost:3000/mcp`), AI agents have access to the following tools:
+
+| Tool Name | Description |
+| :--- | :--- |
+| `whatsapp_plain_text` | Execute any plain-text command (`STATUS`, `CHATS`, `MESSAGES`, `SEND`, `CONTACTS`, `SEARCH`) |
+| `whatsapp_get_status` | Get WhatsApp connection status, active phone number, and message/contact counts |
+| `whatsapp_send_message` | Send a WhatsApp message by contact name, phone number, or group name |
+| `whatsapp_get_chats` | Retrieve recent chats with contact names, phone numbers, and unread counts |
+| `whatsapp_get_messages` | Retrieve chat history for a specific contact/group or recent messages across all chats |
+| `whatsapp_search_messages` | Search through message history by keyword or sender name |
+| `whatsapp_get_contacts` | Search and list saved contacts with their real phone numbers |
+
+---
+
+## 💻 CLI Usage
 
 ```bash
-# Düz metin komutları
-node wa-cli.js text "DURUM"
-node wa-cli.js text "SOHBETLER 15"
-node wa-cli.js text "MESAJLAR Ahmet Yılmaz"
-node wa-cli.js text "GONDER Ahmet Yılmaz | Merhaba!"
-node wa-cli.js text "KISILER Ayşe"
-node wa-cli.js text "ARA toplantı"
+# Plain-text mode
+node wa-cli.js text "STATUS"
+node wa-cli.js text "CHATS 15"
+node wa-cli.js text "MESSAGES Ahmet Yilmaz"
+node wa-cli.js text "SEND Ahmet Yilmaz | Hello!"
+node wa-cli.js text "CONTACTS Ayse"
+node wa-cli.js text "SEARCH meeting"
 
-# JSON çıktılı alt komutlar
+# JSON mode
 node wa-cli.js status
 node wa-cli.js chats 20
-node wa-cli.js messages "Ahmet Yılmaz" 30
-node wa-cli.js send "Ahmet Yılmaz" "Merhaba!"
+node wa-cli.js messages "Ahmet Yilmaz" 30
+node wa-cli.js send "Ahmet Yilmaz" "Hello!"
 ```
 
 ---
 
-## 🔒 Veri Gizliliği ve Güvenlik Yapılandırması
+## 🔒 Privacy & Security Configuration
 
-- **Kişisel Verilerin Konumu**: Oturum çerezleri ve mesaj önbelleği kod klasörünün içine **kaydedilmez**. Varsayılan olarak bilgisayarınızdaki kullanıcı dizinine kaydedilir:
+- **External Data Storage**: Session credentials and message caches are **never** stored inside the repository folder. By default, they are saved in your OS user profile:
   - **Windows**: `%LOCALAPPDATA%\WhatsApp-AI-API`
   - **macOS / Linux**: `~/.local/share/WhatsApp-AI-API`
-- **Ortam Değişkenleri (Opsiyonel)**:
-  - `PORT`: Sunucu portu (Varsayılan: `3000`)
-  - `HOST`: Dinlenecek ağ arayüzü (Varsayılan: `127.0.0.1` — sadece yerel erişim)
-  - `WA_DATA_DIR`: Kalıcı verilerin kaydedileceği özel dizin yolu
-  - `WA_API_KEY`: Tanımlandığında tüm isteklerde `X-API-Key` veya `Authorization: Bearer <KEY>` başlığı zorunlu tutulur
+- **Environment Variables (Optional)**:
+  - `PORT`: Server port (Default: `3000`)
+  - `HOST`: Network interface to bind (Default: `127.0.0.1` — localhost only)
+  - `WA_DATA_DIR`: Custom path for persistent session and message storage
+  - `WA_API_KEY`: Require `X-API-Key` or `Authorization: Bearer <KEY>` header on all requests
 
 ---
 
-## 📄 Lisans
+## 📄 License
 
 MIT © [ze-nox-studio](https://github.com/ze-nox-studio)

@@ -1,8 +1,12 @@
 {
   "name": "whatsapp-ai-api",
   "version": "2.0.0",
-  "description": "Persistent WhatsApp Plain-Text AI Backend, REST API & MCP Server for Gemini, OpenCode, Claude, and all AI Agents",
+  "description": "Persistent WhatsApp Plain-Text AI Backend, REST API & MCP Bridge for Gemini, OpenCode, Claude, and all AI Agents",
   "main": "server.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ze-nox-studio/whatsapp-ai-api.git"
+  },
   "bin": {
     "wa-cli": "./wa-cli.js",
     "whatsapp-mcp": "./mcp-server.js"
