@@ -2,8 +2,32 @@
 
 Bu doküman **Gemini (Antigravity / CLI)**, **OpenCode**, **Claude Code / Claude Desktop**, **Cursor**, **ChatGPT** ve diğer tüm yapay zeka ajanlarının bu bilgisayardaki WhatsApp hesabıyla **Düz Metin (Plain Text)**, **CLI** veya **MCP** üzerinden nasıl iletişim kuracağını açıklar.
 
-> **💡 Herhangi Bir Yapay Zekaya Verebileceğiniz Hazır Talimat (Prompt):**
-> *"Bilgisayarımda `http://localhost:3000` adresinde WhatsApp AI API çalışıyor. Önce `http://localhost:3000/ai.txt` adresini okuyarak düz metin komutlarını öğren, ardından `http://localhost:3000/text` üzerinden WhatsApp mesajlarımı kontrol et / mesaj gönder."*
+---
+
+## 🎯 YAPAY ZEKA AJANI İÇİN DOĞRUDAN TALİMAT (BU DOSYA SANA SÜRÜKLENDİYSE OKU!)
+
+Eğer kullanıcı bu dosyayı (veya `AI_BURAYA_SURUKLE.md` / `AGENTS.md` dosyasını) sohbet penceresine sürüklediyse, senden bu bilgisayardaki **`http://localhost:3000`** adresinde çalışan WhatsApp hesabını yönetmeni istiyordur. **Hiçbir ek kurulum yapmadan veya kodları taramadan şu adımları izle:**
+
+1. **İlk Adım (Bağlantı ve Okunmamışları Gör):**
+   - Hemen `OKUNMAMIS` (veya `DURUM`) komutunu çalıştır (`whatsapp_get_unread` MCP aracıyla, `node wa-cli.js OKUNMAMIS` ile veya `POST http://localhost:3000/text` adresine `OKUNMAMIS` göndererek).
+   - Kullanıcıya hangi kişilerden okunmamış mesaj olduğunu özetle ve ne yapmak istediğini sor.
+2. **Bir Kişiyle Sohbet Ederken (Neyi Nasıl Yapacaksın?):**
+   - **Adım A (Bağlamı Öğren):** Yazmadan önce `MESAJLAR <Kişi Adı> | 30` ile o kişiyle olan son konuşmaları oku.
+   - **Adım B (Doğal Görün):** Mesaj hazırlarken `YAZIYOR <Kişi Adı>` gönder ki karşı tarafta *"yazıyor..."* görünsün; gelen mesajı okuduğunda `OKUNDU <Kişi Adı>` ile Mavi Tik at.
+   - **Adım C (Mesaj Gönder ve Yanıt Gelince Uyan — ASLA Döngü Kurma!):**
+     Mesaj atıp karşıdan cevap bekleyeceksen `GONDER` kullanıp saniyede bir kontrol etme! Doğrudan şu komutu çalıştır:
+     ```text
+     SOR <Kişi Adı> | <Mesajın> | 180
+     ```
+     *(MCP kullanıyorsan: `whatsapp_send_and_wait_reply`)*
+     Bu komut mesajı gönderir, karşı taraf WhatsApp'tan cevap yazana kadar bekler, peş peşe yazdığı satırları birleştirir ve **yanıt geldiği salisede seni uyandırır**!
+   - **Adım D (Sadece Yanıt Bekleyeceksen):** Mesaj atmadan birinden (veya `*` ile herkesten) mesaj beklemek için `BEKLE <Kişi Adı veya *> | 180` (`whatsapp_wait_for_reply`) kullan.
+3. **Kullanıcı Sohbete Bir Dosya (PDF, Görsel, Belge, ZIP) Sürükleyip "Bunu Gönder" Derse:**
+   - Sürüklenen dosyanın bilgisayardaki tam yolunu (`C:\...`) al ve doğrudan şu komutu çalıştır:
+     ```text
+     DOSYA <Kişi Adı> | <Tam Dosya Yolu veya URL> | [Açıklama]
+     ```
+     *(MCP kullanıyorsan: `whatsapp_send_file`)*
 
 ---
 

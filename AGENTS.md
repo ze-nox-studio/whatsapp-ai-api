@@ -4,10 +4,25 @@
 
 ---
 
-## ⚡ 1. Instant TL;DR for AI Agents
+## ⚡ 1. Instant TL;DR & Step-by-Step Playbook (When Dragged Into Chat)
 
-A persistent WhatsApp Web session runs locally at **`http://127.0.0.1:3000`** (`http://localhost:3000`).
-You can interact with WhatsApp in **3 ways** (choose whichever is fastest for your environment):
+If the user dragged this file (or any file from this project) into your chat window, **you are now connected to their local WhatsApp Web session at `http://127.0.0.1:3000` (`http://localhost:3000`)**. Here is exactly **what to do and how to do it**:
+
+1. **Step 1 — Check Unread Messages Immediately:**
+   - Run `OKUNMAMIS` (`UNREAD`) via `POST http://localhost:3000/text`, `node wa-cli.js OKUNMAMIS`, or MCP tool `whatsapp_get_unread`.
+   - Tell the user who sent unread messages and ask how they want to proceed.
+2. **Step 2 — Before Messaging Anyone, Read Recent History:**
+   - Run `MESAJLAR <Contact Name> | 30` (`whatsapp_get_messages`) so you understand the context and tone of the conversation.
+3. **Step 3 — Send & Wait for Reply (Interactive Conversation Loop):**
+   - Show typing indicator: `YAZIYOR <Contact Name>` (`whatsapp_send_presence` with `state: "typing"`).
+   - Send message AND block until they reply:
+     `SOR <Contact Name> | <Your Message> | 180` (`whatsapp_send_and_wait_reply`).
+   - The moment they reply on WhatsApp, the command returns their full burst of messages and wakes you up! Mark as read (`OKUNDU <Contact Name>`), think, and reply again with `SOR`.
+4. **Step 4 — When the User Drags a File (PDF, Image, ZIP, Doc) Into Chat to Send:**
+   - Take the dragged file's absolute local path (`C:\...`) and run:
+     `DOSYA <Contact Name> | <Absolute File Path> | [Optional Caption]` (`whatsapp_send_file`).
+
+You can execute commands in **3 ways** (choose whichever is fastest for your environment):
 
 1. **Plain-Text HTTP (`POST http://localhost:3000/text`)** — Send a single plain-text line, receive clean plain-text output (zero JSON parsing).
 2. **Terminal CLI (`node wa-cli.js "<COMMAND>"`)** — Run directly from PowerShell / Bash.

@@ -368,8 +368,9 @@
             </div>
 
             <div class="form-group">
-              <label>📎 Dosya / Görsel / Belge Ekle (İsteğe Bağlı)</label>
-              <div style="background:#182229;border:1px dashed #2a3942;border-radius:8px;padding:10px;">
+              <label>📎 Dosya / Görsel / Belge Ekle (Sürükle-Bırak veya Seç)</label>
+              <div id="fileDropZone" ondragover="handleFileDragOver(event)" ondragleave="handleFileDragLeave(event)" ondrop="handleFileDrop(event)" style="background:#182229;border:1.5px dashed #2a3942;border-radius:8px;padding:12px;transition:all 0.2s;">
+                <div style="font-size:12px;color:#8696a0;margin-bottom:6px;">📂 Dosyayı buraya sürükleyip bırakın veya aşağıdan seçin:</div>
                 <input type="file" id="fileInput" onchange="handleFileSelect()" style="font-size:12.5px;color:var(--muted);padding:4px 0;border:none;background:transparent;" />
                 <div id="filePreviewBox" style="display:none;margin-top:8px;padding:6px 10px;background:#111b21;border-radius:6px;font-size:12px;color:#06cf9c;justify-content:space-between;align-items:center;">
                   <span id="filePreviewName"></span>
@@ -638,6 +639,37 @@ Ardından http://localhost:3000/text adresine düz metin komutları göndererek
         const data = await res.json();
         if (data.messages) renderMessages(data.messages);
       } catch (e) {}
+    }
+
+    function handleFileDragOver(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const dz = document.getElementById('fileDropZone');
+      if (dz) {
+        dz.style.borderColor = '#00a884';
+        dz.style.background = 'rgba(0, 168, 132, 0.12)';
+      }
+    }
+
+    function handleFileDragLeave(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const dz = document.getElementById('fileDropZone');
+      if (dz) {
+        dz.style.borderColor = '#2a3942';
+        dz.style.background = '#182229';
+      }
+    }
+
+    function handleFileDrop(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      handleFileDragLeave(e);
+      const fileInput = document.getElementById('fileInput');
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        fileInput.files = e.dataTransfer.files;
+        handleFileSelect();
+      }
     }
 
     function handleFileSelect() {
