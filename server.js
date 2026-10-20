@@ -902,6 +902,11 @@ server.on('error', (err) => {
   }
 });
 
+// Disable HTTP request/socket timeouts so long-polling AI wake-up endpoints (/text/wait, /api/wait, /mcp) never drop early
+server.timeout = 0;
+server.requestTimeout = 0;
+server.keepAliveTimeout = 650000;
+
 server.listen(PORT, HOST, () => {
   console.log('╔════════════════════════════════════════════════════════════════╗');
   console.log('║           🤖 WHATSAPP AI API & MCP SUNUCUSU BAŞLADI            ║');

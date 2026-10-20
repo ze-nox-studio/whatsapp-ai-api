@@ -754,96 +754,127 @@ class WhatsAppManager extends EventEmitter {
       const targetLid = resolvedTarget.lid || this.pnToLid[targetCanonId] || null;
       const targetRawChatId = this.store.chats[targetCanonId]?.rawChatId || null;
       const targetNameNorm = normalizeTr(resolvedTarget.name);
+      const altIds = (resolvedTarget.matchedAlternatives || []).map((a) => a.id);
 
       const rawMsgs = await this.client.pupPage.evaluate(
-        async ({ targetCanonId, targetLid, targetRawChatId, targetNameNorm, maxLimit }) => {
+        async ({ targetCanonId, targetLid, targetRawChatId, targetNameNorm, altIds, maxLimit }) => {
           const Collections = window.require('WAWebCollections');
           let LoadMsgs = null;
           try { LoadMsgs = window.require('WAWebChatLoadMessages'); } catch (e) {}
+          let LidUtils = null;
+          try { LidUtils = window.require('WAWebLidMigrationUtils'); } catch (e) {}
 
           const chats = Collections?.Chat?.getModelsArray?.() || [];
-          let targetChat = null;
+          const matchingChats = [];
+          const seenChatIds = new Set();
 
+          const addChat = (ch) => {
+            const cid = ch?.id?._serialized;
+            if (!cid || seenChatIds.has(cid)) return;
+            seenChatIds.add(cid);
+            matchingChats.push(ch);
+          };
+
+          // Collect ALL matching chats (both @c.us and @lid chats for the same person!)
           for (const ch of chats) {
             const cid = ch.id?._serialized;
-            const pn = ch.contact?.phoneNumber?._serialized;
+            const pn =
+              ch.contact?.phoneNumber?._serialized ||
+              (cid?.endsWith('@lid') && LidUtils?.toPn ? LidUtils.toPn(ch.id)?._serialized : null);
+            const lid =
+              ch.contact?.lid?._serialized ||
+              (cid?.endsWith('@c.us') && LidUtils?.toLid ? LidUtils.toLid(ch.id)?._serialized : null);
+
             if (
               cid === targetCanonId ||
               cid === targetLid ||
               cid === targetRawChatId ||
-              pn === targetCanonId
+              pn === targetCanonId ||
+              (targetLid && lid === targetLid) ||
+              (altIds && altIds.includes(cid)) ||
+              (altIds && pn && altIds.includes(pn))
             ) {
-              targetChat = ch;
-              break;
+              addChat(ch);
             }
           }
 
-          // Fallback: match by chat formattedTitle
-          if (!targetChat && targetNameNorm) {
+          // Also match by chat formattedTitle / name
+          if (targetNameNorm) {
             for (const ch of chats) {
-              const title = String(ch.formattedTitle || ch.name || '').toLowerCase().trim();
-              if (title && title === targetNameNorm) {
-                targetChat = ch;
-                break;
+              const title = String(ch.formattedTitle || ch.name || ch.contact?.name || ch.contact?.pushname || '')
+                .toLowerCase()
+                .trim();
+              if (title && (title === targetNameNorm || title.includes(targetNameNorm))) {
+                addChat(ch);
               }
             }
           }
 
-          if (!targetChat) return [];
-
-          let msgArray = targetChat.msgs?.getModelsArray?.() || [];
-          let attempts = 0;
-          while (msgArray.length < maxLimit && attempts < 3 && LoadMsgs?.loadEarlierMsgs) {
-            attempts++;
-            try {
-              const loaded = await Promise.race([
-                LoadMsgs.loadEarlierMsgs({ chat: targetChat }),
-                new Promise((r) => setTimeout(() => r(null), 1500))
-              ]);
-              if (!loaded || !loaded.length) break;
-              msgArray = targetChat.msgs?.getModelsArray?.() || [];
-            } catch (e) {
-              break;
-            }
-          }
+          if (matchingChats.length === 0) return [];
 
           const out = [];
-          const chatTitle = targetChat.formattedTitle || targetChat.name || '';
-          for (const m of msgArray.slice(-maxLimit * 2)) {
-            if (!m || m.isNotification) continue;
-            const t = m.type || 'chat';
-            if (['e2e_notification', 'notification_template', 'gp2', 'protocol', 'ciphertext', 'revoked', 'call_log'].includes(t)) {
-              continue;
+          const seenMsgIds = new Set();
+
+          for (const targetChat of matchingChats) {
+            let msgArray = targetChat.msgs?.getModelsArray?.() || [];
+            let attempts = 0;
+            while (msgArray.length < maxLimit && attempts < 2 && LoadMsgs?.loadEarlierMsgs) {
+              attempts++;
+              try {
+                const loaded = await Promise.race([
+                  LoadMsgs.loadEarlierMsgs({ chat: targetChat }),
+                  new Promise((r) => setTimeout(() => r(null), 1200))
+                ]);
+                if (!loaded || !loaded.length) break;
+                msgArray = targetChat.msgs?.getModelsArray?.() || [];
+              } catch (e) {
+                break;
+              }
             }
-            let txt = '';
-            if (m.body && typeof m.body === 'string' && t === 'chat') txt = m.body;
-            else if (m.caption && typeof m.caption === 'string') txt = m.caption;
-            else if (t === 'image') txt = '[Görsel]';
-            else if (t === 'video') txt = '[Video]';
-            else if (t === 'ptt' || t === 'audio') txt = '[Sesli Mesaj]';
-            else if (t === 'document') txt = `[Belge: ${m.filename || 'Dosya'}]`;
-            else if (t === 'sticker') txt = '[Çıkartma]';
-            else txt = m.body || '';
 
-            if (!txt) continue;
+            const chatTitle = targetChat.formattedTitle || targetChat.name || '';
+            for (const m of msgArray.slice(-maxLimit * 2)) {
+              if (!m || m.isNotification) continue;
+              const t = m.type || 'chat';
+              if (['e2e_notification', 'notification_template', 'gp2', 'protocol', 'ciphertext', 'revoked', 'call_log'].includes(t)) {
+                continue;
+              }
+              let txt = '';
+              if (m.body && typeof m.body === 'string' && t === 'chat') txt = m.body;
+              else if (m.caption && typeof m.caption === 'string') txt = m.caption;
+              else if (t === 'image') txt = '[Görsel]';
+              else if (t === 'video') txt = '[Video]';
+              else if (t === 'ptt' || t === 'audio') txt = '[Sesli Mesaj]';
+              else if (t === 'document') txt = `[Belge: ${m.filename || 'Dosya'}]`;
+              else if (t === 'sticker') txt = '[Çıkartma]';
+              else txt = m.body || '';
 
-            const ts = (m.t || Math.floor(Date.now() / 1000)) * 1000;
-            const fromMe = Boolean(m.id?.fromMe);
-            const rawAuthor = m.author?._serialized || m.author || (fromMe ? 'me' : targetCanonId);
+              if (!txt) continue;
 
-            out.push({
-              id: m.id?._serialized || `msg_${ts}`,
-              chatId: targetCanonId,
-              rawChatId: targetChat.id?._serialized,
-              chatName: chatTitle,
-              fromMe,
-              sender: rawAuthor,
-              senderName: m.notifyName || m.senderObj?.name || m.senderObj?.pushname || '',
-              type: t,
-              text: txt,
-              timestamp: ts
-            });
+              const ts = (m.t || Math.floor(Date.now() / 1000)) * 1000;
+              const msgId = m.id?._serialized || `msg_${ts}_${txt.slice(0, 15)}`;
+              if (seenMsgIds.has(msgId)) continue;
+              seenMsgIds.add(msgId);
+
+              const fromMe = Boolean(m.id?.fromMe);
+              const rawAuthor = m.author?._serialized || m.author || (fromMe ? 'me' : targetCanonId);
+
+              out.push({
+                id: msgId,
+                chatId: targetCanonId,
+                rawChatId: targetChat.id?._serialized,
+                chatName: chatTitle,
+                fromMe,
+                sender: rawAuthor,
+                senderName: m.notifyName || m.senderObj?.name || m.senderObj?.pushname || '',
+                type: t,
+                text: txt,
+                timestamp: ts
+              });
+            }
           }
+
+          out.sort((a, b) => a.timestamp - b.timestamp);
           return out.slice(-maxLimit);
         },
         {
@@ -851,6 +882,7 @@ class WhatsAppManager extends EventEmitter {
           targetLid,
           targetRawChatId,
           targetNameNorm,
+          altIds,
           maxLimit: Number(limit) || 40
         }
       );
@@ -866,6 +898,124 @@ class WhatsAppManager extends EventEmitter {
       console.warn('[fetchChatHistoryFromBrowser] Uyarı:', err.message);
       return [];
     }
+  }
+
+  /**
+   * Installs a direct real-time listener on Chrome's internal WAWebCollections.Msg
+   * so that every incoming or outgoing WhatsApp message wakes up Node.js in <20ms,
+   * even when whatsapp-web.js fails to fire its own 'ready' or 'message_create' event!
+   */
+  async installRealtimeBrowserHook() {
+    if (!this.client?.pupPage) return;
+    try {
+      await this.client.pupPage.exposeFunction('__waBridgeOnNewMsg', (rawMsg) => {
+        try {
+          if (!rawMsg || !rawMsg.id) return;
+          if (rawMsg.lid && rawMsg.pn) {
+            this.lidToPn[rawMsg.lid] = rawMsg.pn;
+            this.pnToLid[rawMsg.pn] = rawMsg.lid;
+          }
+          const alreadyExists = this.store.messages.some((m) => m.id === rawMsg.id);
+          const saved = this.ingestRawMessage(rawMsg);
+          if (saved) {
+            this.scheduleSaveStore();
+            if (!alreadyExists) {
+              this.emit('message', saved);
+              if (!saved.fromMe) {
+                this.emit('incoming_message', saved);
+                this.dispatchWebhooks(saved);
+              }
+            }
+          }
+        } catch (e) {}
+      }).catch(() => {});
+
+      await this.client.pupPage.evaluate(() => {
+        if (window.__waBridgeHookInstalled) return;
+        const Collections = window.require('WAWebCollections');
+        if (!Collections?.Msg) return;
+        window.__waBridgeHookInstalled = true;
+
+        let LidUtils = null;
+        try { LidUtils = window.require('WAWebLidMigrationUtils'); } catch (e) {}
+
+        const extractText = (m) => {
+          if (!m || m.isNotification) return '';
+          const t = m.type || 'chat';
+          if (['e2e_notification', 'notification_template', 'gp2', 'protocol', 'ciphertext', 'revoked', 'call_log'].includes(t)) {
+            return '';
+          }
+          if (m.body && typeof m.body === 'string' && t === 'chat') return m.body;
+          if (m.caption && typeof m.caption === 'string') return m.caption;
+          if (t === 'image') return m.caption ? `[Görsel] ${m.caption}` : '[Görsel]';
+          if (t === 'video') return m.caption ? `[Video] ${m.caption}` : '[Video]';
+          if (t === 'ptt' || t === 'audio') return '[Sesli Mesaj]';
+          if (t === 'document') return `[Belge: ${m.filename || 'Dosya'}]`;
+          if (t === 'sticker') return '[Çıkartma]';
+          if (t === 'location') return '[Konum]';
+          if (t === 'vcard') return '[Kişi Kartı]';
+          return m.body || '';
+        };
+
+        const forwardMsg = (m) => {
+          try {
+            if (!m) return;
+            const txt = extractText(m);
+            if (!txt) return;
+
+            const msgId = m.id?._serialized;
+            if (!msgId) return;
+
+            const fromMe = Boolean(m.id?.fromMe);
+            const rawChatId =
+              m.id?.remote?._serialized ||
+              m.chat?.id?._serialized ||
+              (fromMe ? m.to?._serialized : m.from?._serialized) ||
+              '';
+            if (!rawChatId || rawChatId === 'status@broadcast') return;
+
+            let pn = null;
+            let lid = null;
+            if (rawChatId.endsWith('@lid')) {
+              lid = rawChatId;
+              const c = Collections?.Contact?.get?.(rawChatId);
+              pn = c?.phoneNumber?._serialized || (LidUtils?.toPn ? LidUtils.toPn(m.id?.remote || rawChatId)?._serialized : null);
+            }
+
+            const canonChatId = pn || rawChatId;
+            const chatObj = Collections?.Chat?.get?.(rawChatId) || (pn ? Collections?.Chat?.get?.(pn) : null);
+            const chatTitle = chatObj?.formattedTitle || chatObj?.name || m.notifyName || '';
+            const rawAuthor = m.author?._serialized || m.author || (fromMe ? 'me' : canonChatId);
+            const ts = (m.t || Math.floor(Date.now() / 1000)) * 1000;
+
+            if (typeof window.__waBridgeOnNewMsg === 'function') {
+              window.__waBridgeOnNewMsg({
+                id: msgId,
+                chatId: canonChatId,
+                rawChatId,
+                lid,
+                pn,
+                chatName: chatTitle,
+                fromMe,
+                sender: rawAuthor,
+                senderName: m.notifyName || m.senderObj?.name || m.senderObj?.pushname || '',
+                type: m.type || 'chat',
+                text: txt,
+                timestamp: ts
+              });
+            }
+          } catch (e) {}
+        };
+
+        Collections.Msg.on('add', (m) => {
+          forwardMsg(m);
+          // Sometimes ciphertext is decrypted a few hundred ms after 'add'
+          setTimeout(() => forwardMsg(m), 350);
+          setTimeout(() => forwardMsg(m), 1000);
+        });
+        Collections.Msg.on('change:body', (m) => forwardMsg(m));
+      }).catch(() => {});
+    } catch (e) {}
   }
 
   async start() {
@@ -959,6 +1109,7 @@ class WhatsAppManager extends EventEmitter {
         this.lastError = null;
         console.log(`\n✅ WhatsApp Kalıcı Oturum Aktif: ${this.user?.name || ''} (+${this.user?.phone || ''})\n`);
         this.emit('status', this.getStatus());
+        await this.installRealtimeBrowserHook();
         await this.syncAllData();
       };
 
@@ -1431,8 +1582,39 @@ class WhatsAppManager extends EventEmitter {
   }
 
   /**
+   * Captures a snapshot of all recent message IDs currently in the browser and local store
+   * so waitForReply can detect 100% of newly arrived messages without suffering from PC vs WhatsApp server clock skew.
+   */
+  async snapshotKnownMessageIds() {
+    const known = new Set(this.store.messages.map((m) => m.id));
+    if (this.status === 'connected' && this.client?.pupPage) {
+      try {
+        const browserIds = await this.client.pupPage.evaluate(() => {
+          const Collections = window.require('WAWebCollections');
+          const chats = Collections?.Chat?.getModelsArray?.() || [];
+          const ids = [];
+          for (const ch of chats) {
+            const msgs = ch.msgs?.getModelsArray?.() || [];
+            for (const m of msgs.slice(-15)) {
+              if (m?.id?._serialized) ids.push(m.id._serialized);
+            }
+          }
+          return ids;
+        });
+        for (const id of browserIds || []) {
+          known.add(id);
+        }
+      } catch (e) {}
+    }
+    return known;
+  }
+
+  /**
    * AI Wake-Up Engine: Blocks and waits until a new message arrives from a specific contact/group (or ANY contact if chatId is omitted/wildcard).
-   * Combines real-time EventEmitter wakeup with live browser WAWebCollections polling so not a single reply is ever missed.
+   * Combines:
+   *  1) Direct Chrome WAWebCollections.Msg.on('add') real-time hook (<20ms latency)
+   *  2) Node EventEmitter ('message')
+   *  3) 1-second full browser WAWebCollections scan across both @c.us and @lid chats (immune to clock skew via baseline ID snapshot)
    * Collects rapid burst messages (e.g., when a human sends 2-3 lines back-to-back within collectBurstMs).
    */
   async waitForReply({
@@ -1440,11 +1622,14 @@ class WhatsAppManager extends EventEmitter {
     timeoutSeconds = 120,
     collectBurstMs = 1500,
     onlyIncoming = true,
-    sinceTimestamp = null
+    sinceTimestamp = null,
+    baselineIds = null
   } = {}) {
     if (this.status !== 'connected' || !this.client) {
       throw new Error('WhatsApp henüz bağlı değil. Lütfen http://localhost:3000 adresinden QR kodu okutun.');
     }
+
+    await this.installRealtimeBrowserHook();
 
     const rawTarget = String(chatId || '').trim();
     const isWildcard =
@@ -1455,11 +1640,14 @@ class WhatsAppManager extends EventEmitter {
     const targetJid = targetInfo ? targetInfo.id : null;
     const targetPhone = targetJid ? jidToPhone(targetJid) : null;
     const targetLid = targetInfo?.lid || (targetJid ? this.pnToLid[targetJid] : null);
+    const targetNameNorm = targetInfo ? normalizeTr(targetInfo.name) : '';
+    const rawQueryNorm = isWildcard ? '' : normalizeTr(rawTarget);
+    const altJids = new Set((targetInfo?.matchedAlternatives || []).map((a) => a.id));
 
     const maxWaitMs = Math.min(Math.max(Number(timeoutSeconds) || 120, 3), 1800) * 1000;
     const burstMs = Math.min(Math.max(Number(collectBurstMs) || 1500, 200), 10000);
     const startTs = sinceTimestamp || Date.now();
-    const knownMsgIds = new Set(this.store.messages.slice(-300).map((m) => m.id));
+    const knownMsgIds = baselineIds || (await this.snapshotKnownMessageIds());
 
     this.activeWaiters++;
 
@@ -1470,22 +1658,44 @@ class WhatsAppManager extends EventEmitter {
       let timeoutTimer = null;
       let pollInterval = null;
       let finished = false;
+      let isPolling = false;
 
       const matchesTarget = (msg) => {
-        if (!msg) return false;
+        if (!msg || !msg.id) return false;
         if (onlyIncoming && msg.fromMe) return false;
-        if (msg.timestamp && msg.timestamp < startTs - 2000 && knownMsgIds.has(msg.id)) {
+        if (knownMsgIds.has(msg.id)) return false;
+        // Tolerate up to 15 minutes of Windows PC vs WhatsApp Server clock drift for messages not in knownMsgIds
+        if (msg.timestamp && msg.timestamp < startTs - 15 * 60 * 1000) {
           return false;
         }
         if (isWildcard) return true;
 
         const msgCanon = this.canonicalJid(msg.chatId);
         const msgPhone = jidToPhone(msgCanon);
-        return (
+        if (
           msgCanon === targetJid ||
-          (targetLid && msg.chatId === targetLid) ||
-          (targetPhone && targetPhone !== 'Grup' && msgPhone === targetPhone)
-        );
+          (targetLid && (msg.chatId === targetLid || msg.rawChatId === targetLid)) ||
+          (targetPhone && targetPhone !== 'Grup' && msgPhone === targetPhone) ||
+          altJids.has(msgCanon)
+        ) {
+          return true;
+        }
+
+        // Also match by normalized contact/chat name in case the person wrote from an unlinked @lid or secondary chat
+        const msgChatNorm = normalizeTr(msg.chatName);
+        const msgSenderNorm = normalizeTr(msg.senderName);
+        if (targetNameNorm && (msgChatNorm === targetNameNorm || msgSenderNorm === targetNameNorm)) {
+          return true;
+        }
+        if (
+          rawQueryNorm &&
+          rawQueryNorm.length >= 3 &&
+          (msgChatNorm.includes(rawQueryNorm) || msgSenderNorm.includes(rawQueryNorm))
+        ) {
+          return true;
+        }
+
+        return false;
       };
 
       const finish = (timedOut) => {
@@ -1516,6 +1726,7 @@ class WhatsAppManager extends EventEmitter {
         if (collectedIds.has(msg.id)) return;
 
         collectedIds.add(msg.id);
+        knownMsgIds.add(msg.id);
         collected.push(msg);
 
         // Reset burst timer so rapid multi-line human replies are grouped together
@@ -1525,58 +1736,101 @@ class WhatsAppManager extends EventEmitter {
 
       this.on('message', onMsg);
 
-      // Live browser fallback check every 2 seconds to catch messages directly from WAWebCollections
+      // Active 1-second browser scanner across all chats (both @c.us and @lid)
       pollInterval = setInterval(async () => {
-        if (finished || this.status !== 'connected') return;
+        if (finished || isPolling || this.status !== 'connected' || !this.client?.pupPage) return;
+        isPolling = true;
         try {
-          if (targetInfo) {
-            const rawMsgs = await this.fetchChatHistoryFromBrowser(targetInfo, 10);
-            for (const rm of rawMsgs || []) {
-              if (rm.timestamp >= startTs - 1500 && !knownMsgIds.has(rm.id)) {
-                const formatted = this.ingestRawMessage(rm);
-                if (formatted) onMsg(formatted);
+          const recentBrowserMsgs = await this.client.pupPage.evaluate(() => {
+            const Collections = window.require('WAWebCollections');
+            let LidUtils = null;
+            try { LidUtils = window.require('WAWebLidMigrationUtils'); } catch (e) {}
+
+            const extractText = (m) => {
+              if (!m || m.isNotification) return '';
+              const t = m.type || 'chat';
+              if (['e2e_notification', 'notification_template', 'gp2', 'protocol', 'ciphertext', 'revoked', 'call_log'].includes(t)) {
+                return '';
+              }
+              if (m.body && typeof m.body === 'string' && t === 'chat') return m.body;
+              if (m.caption && typeof m.caption === 'string') return m.caption;
+              if (t === 'image') return m.caption ? `[Görsel] ${m.caption}` : '[Görsel]';
+              if (t === 'video') return m.caption ? `[Video] ${m.caption}` : '[Video]';
+              if (t === 'ptt' || t === 'audio') return '[Sesli Mesaj]';
+              if (t === 'document') return `[Belge: ${m.filename || 'Dosya'}]`;
+              if (t === 'sticker') return '[Çıkartma]';
+              if (t === 'location') return '[Konum]';
+              if (t === 'vcard') return '[Kişi Kartı]';
+              return m.body || '';
+            };
+
+            const chats = Collections?.Chat?.getModelsArray?.() || [];
+            const out = [];
+            for (const ch of chats) {
+              const rawChatId = ch.id?._serialized;
+              if (!rawChatId || rawChatId === 'status@broadcast') continue;
+              const msgs = ch.msgs?.getModelsArray?.() || [];
+              if (!msgs.length) continue;
+
+              let pn = null;
+              let lid = null;
+              if (rawChatId.endsWith('@lid')) {
+                lid = rawChatId;
+                pn =
+                  ch.contact?.phoneNumber?._serialized ||
+                  (LidUtils?.toPn ? LidUtils.toPn(ch.id)?._serialized : null);
+              }
+              const canonChatId = pn || rawChatId;
+              const chatTitle =
+                ch.formattedTitle || ch.name || ch.contact?.name || ch.contact?.pushname || '';
+
+              for (const m of msgs.slice(-6)) {
+                if (!m || m.isNotification) continue;
+                const txt = extractText(m);
+                if (!txt) continue;
+                const msgId = m.id?._serialized;
+                if (!msgId) continue;
+                const fromMe = Boolean(m.id?.fromMe);
+                const ts = (m.t || Math.floor(Date.now() / 1000)) * 1000;
+                const rawAuthor = m.author?._serialized || m.author || (fromMe ? 'me' : canonChatId);
+
+                out.push({
+                  id: msgId,
+                  chatId: canonChatId,
+                  rawChatId,
+                  lid,
+                  pn,
+                  chatName: chatTitle,
+                  fromMe,
+                  sender: rawAuthor,
+                  senderName: m.notifyName || m.senderObj?.name || m.senderObj?.pushname || '',
+                  type: m.type || 'chat',
+                  text: txt,
+                  timestamp: ts
+                });
               }
             }
-          } else if (this.client?.pupPage) {
-            // Check top 5 active chats for any new incoming message
-            const latestRaw = await this.client.pupPage.evaluate((minTs) => {
-              const Collections = window.require('WAWebCollections');
-              const chats = Collections?.Chat?.getModelsArray?.() || [];
-              const out = [];
-              for (const ch of chats.slice(0, 8)) {
-                const rawChatId = ch.id?._serialized;
-                if (!rawChatId || rawChatId === 'status@broadcast') continue;
-                const msgs = ch.msgs?.getModelsArray?.() || [];
-                for (const m of msgs.slice(-5)) {
-                  if (!m || m.isNotification || m.id?.fromMe) continue;
-                  const ts = (m.t || 0) * 1000;
-                  if (ts >= minTs && m.body && m.type === 'chat') {
-                    out.push({
-                      id: m.id?._serialized || `${rawChatId}_${ts}`,
-                      chatId: rawChatId,
-                      rawChatId,
-                      chatName: ch.formattedTitle || ch.name || '',
-                      fromMe: false,
-                      sender: m.author?._serialized || rawChatId,
-                      senderName: m.notifyName || m.senderObj?.pushname || '',
-                      type: 'chat',
-                      text: m.body,
-                      timestamp: ts
-                    });
-                  }
-                }
-              }
-              return out;
-            }, startTs - 1500);
-            for (const rm of latestRaw || []) {
-              if (!knownMsgIds.has(rm.id)) {
-                const formatted = this.ingestRawMessage(rm);
-                if (formatted) onMsg(formatted);
+            return out;
+          });
+
+          for (const rm of recentBrowserMsgs || []) {
+            if (rm.lid && rm.pn) {
+              this.lidToPn[rm.lid] = rm.pn;
+              this.pnToLid[rm.pn] = rm.lid;
+            }
+            if (!knownMsgIds.has(rm.id)) {
+              const formatted = this.ingestRawMessage(rm);
+              if (formatted) {
+                onMsg(formatted);
               }
             }
           }
-        } catch (e) {}
-      }, 2000);
+        } catch (e) {
+          // Ignore transient evaluation errors
+        } finally {
+          isPolling = false;
+        }
+      }, 1000);
 
       timeoutTimer = setTimeout(() => finish(true), maxWaitMs);
     });
@@ -1588,15 +1842,21 @@ class WhatsAppManager extends EventEmitter {
    */
   async sendAndWaitForReply(toOrName, text, options = {}) {
     const sendStartTs = Date.now();
+    // Snapshot baseline message IDs BEFORE sending so even an instant reply (<200ms) is never missed!
+    const baselineIds = await this.snapshotKnownMessageIds();
     const sent = await this.sendMessage(toOrName, text, {
       replyToMessageId: options.replyToMessageId
     });
+    if (sent?.messageId) {
+      baselineIds.add(sent.messageId);
+    }
     const waitResult = await this.waitForReply({
-      chatId: sent.to,
+      chatId: toOrName,
       timeoutSeconds: options.timeoutSeconds || 120,
       collectBurstMs: options.collectBurstMs || 1500,
       onlyIncoming: true,
-      sinceTimestamp: sendStartTs
+      sinceTimestamp: sendStartTs,
+      baselineIds
     });
 
     return {
