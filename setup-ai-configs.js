@@ -105,3 +105,21 @@ updateJsonFile(
   },
   'Claude Desktop'
 );
+
+// 6. Install Global Agent Skill (SKILL.md) for Antigravity & Claude Code
+const skillSource = path.join(__dirname, 'SKILL.md');
+if (fs.existsSync(skillSource)) {
+  const skillTargets = [
+    { label: 'Antigravity Skill', dest: path.join(home, '.gemini', 'antigravity', 'skills', 'whatsapp-ai-bridge', 'SKILL.md') },
+    { label: 'Claude Skill', dest: path.join(home, '.claude', 'skills', 'whatsapp-ai-bridge', 'SKILL.md') }
+  ];
+  for (const t of skillTargets) {
+    try {
+      fs.mkdirSync(path.dirname(t.dest), { recursive: true });
+      fs.copyFileSync(skillSource, t.dest);
+      console.log(`✅ [${t.label}] yüklendi -> ${t.dest}`);
+    } catch (err) {
+      console.warn(`⚠️ [${t.label}] yüklenemedi: ${err.message}`);
+    }
+  }
+}

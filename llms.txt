@@ -1,0 +1,41 @@
+# WhatsApp AI API & MCP Bridge (llms.txt)
+
+> Local WhatsApp Web API, Plain-Text (`text/plain`) AI Backend, and Model Context Protocol (MCP) Server running at `http://localhost:3000`.
+
+## Fast AI Discovery Links
+- Live Plain-Text Guide: `http://localhost:3000/ai.txt`
+- Plain-Text Command Endpoint: `POST http://localhost:3000/text` (`Content-Type: text/plain`)
+- Live SSE Plain-Text Stream: `GET http://localhost:3000/text/stream`
+- OpenAPI 3.1 Schema: `GET http://localhost:3000/openapi.json`
+- MCP HTTP Endpoint: `POST http://localhost:3000/mcp`
+
+## Plain-Text Commands (`POST http://localhost:3000/text`)
+- `STATUS` (or `DURUM`) -> Connection status & account info
+- `UNREAD` (or `OKUNMAMIS`) -> List all chats with unread messages and their contents
+- `ASK <Name/Phone> | <Message> | [TimeoutSec]` (or `SOR`) -> Send message AND wait until recipient replies (wakes AI up immediately!)
+- `WAIT [Name/Phone or *] | [TimeoutSec]` (or `BEKLE`) -> Block until a new message arrives from contact or `*` (anyone) and wake AI up
+- `SEND <Name/Phone> | <Message>` (or `GONDER`) -> Send message by contact name or phone number
+- `FILE <Name/Phone> | <FilePath or URL> | [Caption]` (or `DOSYA`) -> Send PDF, image, doc, audio, video, or ZIP
+- `TYPING <Name/Phone>` (or `YAZIYOR`) -> Show "typing..." indicator in chat
+- `SEEN <Name/Phone>` (or `OKUNDU`) -> Mark chat messages as read (Blue Ticks)
+- `MESSAGES <Name/Phone> | [Limit]` (or `MESAJLAR`) -> Fetch message history with contact/group
+- `CHATS [Limit] [Search]` (or `SOHBETLER`) -> List recent conversations
+- `CONTACTS [Search]` (or `KISILER`) -> Search contacts with real phone numbers
+- `SEARCH <Keyword>` (or `ARA`) -> Search message history by keyword
+
+## CLI Usage
+- `node wa-cli.js "<Plain-Text Command>"` (e.g., `node wa-cli.js "SOR Ahmet Yilmaz | Hello! | 120"`)
+
+## MCP Tools (`mcp-server.js` / `POST /mcp`)
+- `whatsapp_send_and_wait_reply` (`to`, `text`, `timeoutSeconds`)
+- `whatsapp_wait_for_reply` (`chatId`, `timeoutSeconds`)
+- `whatsapp_get_unread` (`limit`)
+- `whatsapp_send_message` (`to`, `text`)
+- `whatsapp_send_file` (`to`, `filePath`, `url`, `caption`)
+- `whatsapp_send_presence` (`to`, `state`)
+- `whatsapp_get_messages` (`chatId`, `limit`)
+- `whatsapp_get_chats` (`limit`, `search`)
+- `whatsapp_get_contacts` (`search`, `limit`)
+- `whatsapp_search_messages` (`query`, `limit`)
+- `whatsapp_get_status` ()
+- `whatsapp_plain_text` (`command`)

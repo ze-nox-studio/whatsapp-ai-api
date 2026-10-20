@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
+const fs = require('fs');
 const { WebSocketServer } = require('ws');
 const path = require('path');
 const waManager = require('./whatsapp-manager');
@@ -89,9 +90,19 @@ waManager.on('message', (msg) => broadcast('message', msg));
 // 1. PLAIN-TEXT AI BACKEND ENDPOINTS (Düz Metin İletişim Katmanı)
 // ============================================================================
 
-// AI Kullanım Kılavuzu (Plain Text)
-app.get(['/ai.txt', '/llms.txt', '/text/help', '/kullanim-kilavuzu.txt'], (req, res) => {
+// AI Kullanım Kılavuzu (Plain Text) & Agent Discovery Endpoints
+app.get(['/ai.txt', '/llms.txt', '/llms-full.txt', '/text/help', '/kullanim-kilavuzu.txt'], (req, res) => {
   sendPlain(res, getAiGuideText(PORT));
+});
+
+app.get(['/agents.md', '/AGENTS.md'], (req, res) => {
+  const p = path.join(__dirname, 'AGENTS.md');
+  sendPlain(res, fs.existsSync(p) ? fs.readFileSync(p, 'utf-8') : getAiGuideText(PORT));
+});
+
+app.get(['/skill.md', '/SKILL.md'], (req, res) => {
+  const p = path.join(__dirname, 'SKILL.md');
+  sendPlain(res, fs.existsSync(p) ? fs.readFileSync(p, 'utf-8') : getAiGuideText(PORT));
 });
 
 // Tek Noktadan Düz Metin Komut İşleyici (GET & POST /text, /api/text)

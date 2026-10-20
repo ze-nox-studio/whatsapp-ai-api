@@ -1,0 +1,10 @@
+# Cursor Rules — WhatsApp AI API & MCP Bridge
+
+Always refer to `AGENTS.md` for project structure and AI interaction protocols.
+
+## Core Principles
+1. Local WhatsApp API runs on `http://127.0.0.1:3000`.
+2. Plain-text AI protocol is available at `POST /text` and `GET /ai.txt` (`/llms.txt`).
+3. Never use polling loops to wait for WhatsApp replies. Use `SOR <Name> | <Message> | <TimeoutSec>` (`ASK` / `whatsapp_send_and_wait_reply`) or `BEKLE <Name or *> | <TimeoutSec>` (`WAIT` / `whatsapp_wait_for_reply`).
+4. Never store session files, caches, or personal phone numbers/names in the repository. All persistent state belongs in `%LOCALAPPDATA%\WhatsApp-AI-API`.
+5. Maintain both English and Turkish command aliases in `plain-text-handler.js` (`STATUS`/`DURUM`, `UNREAD`/`OKUNMAMIS`, `ASK`/`SOR`, `WAIT`/`BEKLE`, `SEND`/`GONDER`, `FILE`/`DOSYA`, `TYPING`/`YAZIYOR`, `SEEN`/`OKUNDU`).
