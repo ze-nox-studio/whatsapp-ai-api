@@ -67,6 +67,29 @@ komutları gönderebilirsiniz:
   Örnek: GONDER 05551234567 | Selamlar
   -> Rehberdeki kişi ismini (veya numarayı) otomatik bulup mesajı gönderir.
 
+• SOR <kişi_adı_veya_numara> | <mesaj_metni> | [bekleme_saniyesi]
+  (veya ASK <kişi_adı_veya_numara> | <mesaj_metni> | [bekleme_saniyesi])
+  Örnek: SOR Ahmet Yılmaz | Merhaba, yarın saat kaçta müsait olursun? | 180
+  -> Mesajı gönderir ve karşı taraf yanıt yazana kadar bekler; yanıt geldiği anda AI'ı uyandırıp cevabı döndürür!
+
+• BEKLE [kişi_adı_veya_numara_veya_*] | [bekleme_saniyesi]
+  (veya WAIT [kişi_adı_veya_numara_veya_*] | [bekleme_saniyesi])
+  Örnek: BEKLE Ahmet Yılmaz | 120
+  Örnek: BEKLE * | 300
+  -> Belirtilen kişiden (veya * ile herhangi birinden) yeni mesaj gelene kadar bekler, mesaj geldiği anda AI'ı uyandırır!
+
+• OKUNMAMIS
+  (veya UNREAD)
+  -> Okunmamış mesajı olan tüm sohbetleri ve bekleyen mesajları özetler.
+
+• YAZIYOR <kişi_adı_veya_numara>
+  (veya TYPING <kişi_adı_veya_numara>)
+  -> Karşı tarafa WhatsApp'ta "yazıyor..." (typing...) durumunu gösterir.
+
+• OKUNDU <kişi_adı_veya_numara>
+  (veya SEEN <kişi_adı_veya_numara>)
+  -> Sohbetteki mesajları okundu (mavi tik) olarak işaretler.
+
 • DOSYA <kişi_adı_veya_numara> | <dosya_yolu_veya_url> | [açıklama_metni]
   (veya FILE <kişi_adı_veya_numara> | <dosya_yolu_veya_url> | [açıklama_metni])
   Örnek: DOSYA Ahmet Yılmaz | C:\\Belgeler\\rapor.pdf | Güncel rapor ektedir
@@ -127,17 +150,24 @@ Tarayıcı, cURL, fetch veya herhangi bir araçla doğrudan çağrılabilir:
 8) Mesaj İçeriği Arama:
    GET http://localhost:${port}/text/search?q=toplanti&limit=20
 
+9) Yanıt Bekleme & AI Uyandırma (Blocking Wait / Ask / Stream):
+   GET  http://localhost:${port}/text/wait?chat=Ahmet%20Yilmaz&timeout=120
+   POST http://localhost:${port}/text/ask  (Body: Ahmet Yılmaz | Merhaba, uygun musun? | 120)
+   GET  http://localhost:${port}/text/unread
+   GET  http://localhost:${port}/text/stream  (Gerçek zamanlı SSE mesaj akışı)
+
 --------------------------------------------------------------------------------
 3. TERMINAL / KOMUT SATIRI (CLI) KULLANIMI (OpenCode, Claude Code, Gemini)
 --------------------------------------------------------------------------------
 Terminal erişimi olan yapay zekalar doğrudan şu komutları çalıştırabilir:
 
   node wa-cli.js text "DURUM"
+  node wa-cli.js text "OKUNMAMIS"
   node wa-cli.js text "SOHBETLER 15"
   node wa-cli.js text "MESAJLAR Ahmet Yılmaz"
-  node wa-cli.js text "KISILER Ayşe"
-  node wa-cli.js text "ARA toplantı"
   node wa-cli.js text "GONDER Ahmet Yılmaz | Merhaba!"
+  node wa-cli.js text "SOR Ahmet Yılmaz | Yarın uygun musun? | 180"
+  node wa-cli.js text "BEKLE Ahmet Yılmaz | 120"
   node wa-cli.js text "DOSYA Ahmet Yılmaz | C:\\Belgeler\\rapor.pdf | Rapor ektedir"
 ================================================================================
 `;
@@ -342,6 +372,135 @@ async function executePlainTextCommand(waManager, rawInput, port = 3000) {
       if (!rest) throw new Error('Kullanım: ARA <aranacak kelime>');
       const results = waManager.searchMessages(rest, 30);
       return formatMessagesText(results, `"${rest}" ARAMA SONUÇLARI`);
+    }
+
+    case 'OKUNMAMIS':
+    case 'OKUNMAMIŞ':
+    case 'OKUNMAMISLAR':
+    case 'UNREAD': {
+      const limit = /^\d+$/.test(rest) ? Number(rest) : 30;
+      const summary = await waManager.getUnreadSummary(limit);
+      if (!summary.totalUnreadChats) {
+        return '=== OKUNMAMIŞ MESAJLAR ===\n✅ Şu anda okunmamış mesaj bulunmuyor.';
+      }
+      const lines = [
+        `=== OKUNMAMIŞ MESAJLAR (${summary.totalUnreadChats} sohbet, toplam ${summary.totalUnreadMessages} yeni mesaj) ===`
+      ];
+      summary.chats.forEach((c, idx) => {
+        lines.push(`\n${idx + 1}. ${c.name} (+${c.phone}) — ${c.unreadCount} okunmamış mesaj:`);
+        for (const m of c.messages) {
+          lines.push(`   [${formatDateTr(m.timestamp)}] ${m.senderName}: ${m.text}`);
+        }
+      });
+      return lines.join('\n');
+    }
+
+    case 'BEKLE':
+    case 'YANIT_BEKLE':
+    case 'WAIT':
+    case 'WAIT_REPLY': {
+      let chatTarget = '*';
+      let timeoutSeconds = 120;
+      if (rest) {
+        if (rest.includes('|')) {
+          const [left, right] = rest.split('|').map((s) => s.trim());
+          if (left) chatTarget = left;
+          if (/^\d+$/.test(right)) timeoutSeconds = Number(right);
+        } else if (/^\d+$/.test(rest)) {
+          timeoutSeconds = Number(rest);
+        } else {
+          chatTarget = rest;
+        }
+      }
+      const res = await waManager.waitForReply({ chatId: chatTarget, timeoutSeconds });
+      if (!res.received) {
+        return [
+          '⏱️ YANIT BEKLEME SÜRESİ DOLDU (Zaman Aşımı)',
+          `Beklenen Kişi  : ${res.target.name} (+${res.target.phone})`,
+          `Beklenen Süre  : ${res.waitedSeconds} saniye`,
+          'Durum          : Bu süre içinde yeni bir mesaj gelmedi.'
+        ].join('\n');
+      }
+      const lines = [
+        '🔔 YENİ YANIT GELDİ! (AI Uyandırıldı)',
+        `Gönderen Sohbet: ${res.target.name} (+${res.target.phone})`,
+        `Bekleme Süresi : ${res.waitedSeconds} saniye`,
+        `Mesaj Sayısı   : ${res.messages.length}`,
+        '--- GELEN MESAJ(LAR) ---'
+      ];
+      for (const m of res.messages) {
+        lines.push(`[${formatDateTr(m.timestamp)}] ${m.senderName} (+${m.senderPhone}): ${m.text}`);
+      }
+      return lines.join('\n');
+    }
+
+    case 'SOR':
+    case 'GONDER_BEKLE':
+    case 'GÖNDER_BEKLE':
+    case 'ASK':
+    case 'SEND_WAIT': {
+      const parts = rest.split('|').map((s) => s.trim());
+      if (parts.length < 2 || !parts[0] || !parts[1]) {
+        throw new Error('Kullanım: SOR <Kişi Adı veya Numara> | <Mesaj Metni> | [Bekleme Saniyesi]');
+      }
+      const toPart = parts[0];
+      const textPart = parts[1];
+      const timeoutSeconds = parts[2] && /^\d+$/.test(parts[2]) ? Number(parts[2]) : 120;
+
+      const res = await waManager.sendAndWaitForReply(toPart, textPart, { timeoutSeconds });
+      if (!res.replyReceived) {
+        return [
+          '✅ MESAJ GÖNDERİLDİ ANCAK SÜRE İÇİNDE YANIT GELMEDİ',
+          `Alıcı          : ${res.sent.recipientName} (+${res.sent.recipientPhone})`,
+          `Gönderilen Msj : ${res.sent.text}`,
+          `Beklenen Süre  : ${res.waitedSeconds} saniye`
+        ].join('\n');
+      }
+      const lines = [
+        '🔔 MESAJ GÖNDERİLDİ VE KARŞI TARAFTAN YANIT GELDİ!',
+        `Kişi           : ${res.sent.recipientName} (+${res.sent.recipientPhone})`,
+        `Gönderilen Msj : ${res.sent.text}`,
+        `Yanıt Süresi   : ${res.waitedSeconds} saniye`,
+        '--- KARŞI TARAFIN YANITI ---'
+      ];
+      for (const m of res.replies) {
+        lines.push(`[${formatDateTr(m.timestamp)}] ${m.senderName}: ${m.text}`);
+      }
+      return lines.join('\n');
+    }
+
+    case 'YAZIYOR':
+    case 'TYPING': {
+      if (!rest) throw new Error('Kullanım: YAZIYOR <Kişi Adı veya Numara>');
+      const [target, dur] = rest.split('|').map((s) => s.trim());
+      const res = await waManager.sendPresenceState(target, 'typing', Number(dur) || 5);
+      return `✍️ "${res.recipientName}" (+${res.recipientPhone}) sohbetinde "yazıyor..." durumu gösteriliyor.`;
+    }
+
+    case 'OKUNDU':
+    case 'SEEN':
+    case 'READ': {
+      if (!rest) throw new Error('Kullanım: OKUNDU <Kişi Adı veya Numara>');
+      const res = await waManager.sendPresenceState(rest, 'seen');
+      return `✅ "${res.recipientName}" (+${res.recipientPhone}) sohbeti okundu (mavi tik) olarak işaretlendi.`;
+    }
+
+    case 'WEBHOOK_EKLE':
+    case 'ADD_WEBHOOK': {
+      const list = waManager.addWebhook(rest);
+      return `✅ Webhook eklendi. Aktif Webhook sayısı: ${list.length}\n${list.join('\n')}`;
+    }
+
+    case 'WEBHOOK_SIL':
+    case 'REMOVE_WEBHOOK': {
+      const list = waManager.removeWebhook(rest);
+      return `✅ Webhook silindi. Aktif Webhook sayısı: ${list.length}`;
+    }
+
+    case 'WEBHOOKLAR':
+    case 'WEBHOOKS': {
+      const list = waManager.getWebhooks();
+      return list.length ? `=== AKTİF WEBHOOK URL'LERİ ===\n${list.join('\n')}` : 'Kayıtlı webhook bulunmuyor.';
     }
 
     default: {

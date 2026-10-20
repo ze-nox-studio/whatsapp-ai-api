@@ -116,6 +116,8 @@ class WhatsAppManager extends EventEmitter {
 
     this.lidToPn = {}; // "10000000000000@lid" -> "905551234567@c.us"
     this.pnToLid = {}; // "905551234567@c.us" -> "10000000000000@lid"
+    this.webhooks = new Set();
+    this.activeWaiters = 0;
 
     this.store = {
       chats: {},     // id -> { id, rawChatId, name, phone, isGroup, unreadCount, conversationTimestamp, lastMessage }
@@ -1019,6 +1021,10 @@ class WhatsAppManager extends EventEmitter {
           if (saved) {
             this.scheduleSaveStore();
             this.emit('message', saved);
+            if (!saved.fromMe) {
+              this.emit('incoming_message', saved);
+              this.dispatchWebhooks(saved);
+            }
           }
         } catch (e) {}
       });
@@ -1422,6 +1428,326 @@ class WhatsAppManager extends EventEmitter {
     });
 
     return list.slice(0, Number(limit) || 100);
+  }
+
+  /**
+   * AI Wake-Up Engine: Blocks and waits until a new message arrives from a specific contact/group (or ANY contact if chatId is omitted/wildcard).
+   * Combines real-time EventEmitter wakeup with live browser WAWebCollections polling so not a single reply is ever missed.
+   * Collects rapid burst messages (e.g., when a human sends 2-3 lines back-to-back within collectBurstMs).
+   */
+  async waitForReply({
+    chatId = '',
+    timeoutSeconds = 120,
+    collectBurstMs = 1500,
+    onlyIncoming = true,
+    sinceTimestamp = null
+  } = {}) {
+    if (this.status !== 'connected' || !this.client) {
+      throw new Error('WhatsApp henüz bağlı değil. Lütfen http://localhost:3000 adresinden QR kodu okutun.');
+    }
+
+    const rawTarget = String(chatId || '').trim();
+    const isWildcard =
+      !rawTarget ||
+      ['*', 'ANY', 'ALL', 'TUMU', 'TÜMÜ', 'HEPSI', 'HEPSİ', 'HERKES'].includes(rawTarget.toUpperCase());
+
+    const targetInfo = isWildcard ? null : this.resolveRecipient(rawTarget);
+    const targetJid = targetInfo ? targetInfo.id : null;
+    const targetPhone = targetJid ? jidToPhone(targetJid) : null;
+    const targetLid = targetInfo?.lid || (targetJid ? this.pnToLid[targetJid] : null);
+
+    const maxWaitMs = Math.min(Math.max(Number(timeoutSeconds) || 120, 3), 1800) * 1000;
+    const burstMs = Math.min(Math.max(Number(collectBurstMs) || 1500, 200), 10000);
+    const startTs = sinceTimestamp || Date.now();
+    const knownMsgIds = new Set(this.store.messages.slice(-300).map((m) => m.id));
+
+    this.activeWaiters++;
+
+    return new Promise((resolve) => {
+      const collected = [];
+      const collectedIds = new Set();
+      let burstTimer = null;
+      let timeoutTimer = null;
+      let pollInterval = null;
+      let finished = false;
+
+      const matchesTarget = (msg) => {
+        if (!msg) return false;
+        if (onlyIncoming && msg.fromMe) return false;
+        if (msg.timestamp && msg.timestamp < startTs - 2000 && knownMsgIds.has(msg.id)) {
+          return false;
+        }
+        if (isWildcard) return true;
+
+        const msgCanon = this.canonicalJid(msg.chatId);
+        const msgPhone = jidToPhone(msgCanon);
+        return (
+          msgCanon === targetJid ||
+          (targetLid && msg.chatId === targetLid) ||
+          (targetPhone && targetPhone !== 'Grup' && msgPhone === targetPhone)
+        );
+      };
+
+      const finish = (timedOut) => {
+        if (finished) return;
+        finished = true;
+        this.activeWaiters = Math.max(0, this.activeWaiters - 1);
+        this.removeListener('message', onMsg);
+        if (burstTimer) clearTimeout(burstTimer);
+        if (timeoutTimer) clearTimeout(timeoutTimer);
+        if (pollInterval) clearInterval(pollInterval);
+
+        const waitedSeconds = Number(((Date.now() - startTs) / 1000).toFixed(1));
+        resolve({
+          received: collected.length > 0,
+          timedOut: timedOut && collected.length === 0,
+          waitedSeconds,
+          target: targetInfo
+            ? { id: targetInfo.id, name: targetInfo.name, phone: targetInfo.phone }
+            : { id: '*', name: 'Tüm Sohbetler', phone: '*' },
+          messages: collected,
+          combinedText: collected.map((m) => m.text).join('\n')
+        });
+      };
+
+      const onMsg = (msg) => {
+        if (finished) return;
+        if (!matchesTarget(msg)) return;
+        if (collectedIds.has(msg.id)) return;
+
+        collectedIds.add(msg.id);
+        collected.push(msg);
+
+        // Reset burst timer so rapid multi-line human replies are grouped together
+        if (burstTimer) clearTimeout(burstTimer);
+        burstTimer = setTimeout(() => finish(false), burstMs);
+      };
+
+      this.on('message', onMsg);
+
+      // Live browser fallback check every 2 seconds to catch messages directly from WAWebCollections
+      pollInterval = setInterval(async () => {
+        if (finished || this.status !== 'connected') return;
+        try {
+          if (targetInfo) {
+            const rawMsgs = await this.fetchChatHistoryFromBrowser(targetInfo, 10);
+            for (const rm of rawMsgs || []) {
+              if (rm.timestamp >= startTs - 1500 && !knownMsgIds.has(rm.id)) {
+                const formatted = this.ingestRawMessage(rm);
+                if (formatted) onMsg(formatted);
+              }
+            }
+          } else if (this.client?.pupPage) {
+            // Check top 5 active chats for any new incoming message
+            const latestRaw = await this.client.pupPage.evaluate((minTs) => {
+              const Collections = window.require('WAWebCollections');
+              const chats = Collections?.Chat?.getModelsArray?.() || [];
+              const out = [];
+              for (const ch of chats.slice(0, 8)) {
+                const rawChatId = ch.id?._serialized;
+                if (!rawChatId || rawChatId === 'status@broadcast') continue;
+                const msgs = ch.msgs?.getModelsArray?.() || [];
+                for (const m of msgs.slice(-5)) {
+                  if (!m || m.isNotification || m.id?.fromMe) continue;
+                  const ts = (m.t || 0) * 1000;
+                  if (ts >= minTs && m.body && m.type === 'chat') {
+                    out.push({
+                      id: m.id?._serialized || `${rawChatId}_${ts}`,
+                      chatId: rawChatId,
+                      rawChatId,
+                      chatName: ch.formattedTitle || ch.name || '',
+                      fromMe: false,
+                      sender: m.author?._serialized || rawChatId,
+                      senderName: m.notifyName || m.senderObj?.pushname || '',
+                      type: 'chat',
+                      text: m.body,
+                      timestamp: ts
+                    });
+                  }
+                }
+              }
+              return out;
+            }, startTs - 1500);
+            for (const rm of latestRaw || []) {
+              if (!knownMsgIds.has(rm.id)) {
+                const formatted = this.ingestRawMessage(rm);
+                if (formatted) onMsg(formatted);
+              }
+            }
+          }
+        } catch (e) {}
+      }, 2000);
+
+      timeoutTimer = setTimeout(() => finish(true), maxWaitMs);
+    });
+  }
+
+  /**
+   * Sends a message to a contact/group AND blocks until they reply (or timeout expires),
+   * waking up the AI agent immediately with the human's response!
+   */
+  async sendAndWaitForReply(toOrName, text, options = {}) {
+    const sendStartTs = Date.now();
+    const sent = await this.sendMessage(toOrName, text, {
+      replyToMessageId: options.replyToMessageId
+    });
+    const waitResult = await this.waitForReply({
+      chatId: sent.to,
+      timeoutSeconds: options.timeoutSeconds || 120,
+      collectBurstMs: options.collectBurstMs || 1500,
+      onlyIncoming: true,
+      sinceTimestamp: sendStartTs
+    });
+
+    return {
+      success: true,
+      sent,
+      replyReceived: waitResult.received,
+      timedOut: waitResult.timedOut,
+      waitedSeconds: waitResult.waitedSeconds,
+      replies: waitResult.messages,
+      replyText: waitResult.combinedText
+    };
+  }
+
+  /**
+   * Returns all chats that currently have unread messages along with their recent incoming messages.
+   */
+  async getUnreadSummary(limit = 30) {
+    if (this.status === 'connected' && this.client?.pupPage) {
+      await this.syncAllData();
+    }
+    const unreadChats = Object.values(this.store.chats)
+      .filter((c) => Number(c.unreadCount) > 0)
+      .sort((a, b) => (b.conversationTimestamp || 0) - (a.conversationTimestamp || 0))
+      .slice(0, Number(limit) || 30);
+
+    const items = [];
+    for (const ch of unreadChats) {
+      const recentIncoming = await this.getMessages({
+        chatId: ch.id,
+        limit: Math.max(Number(ch.unreadCount) || 5, 5),
+        onlyIncoming: true
+      });
+      items.push({
+        chatId: ch.id,
+        name: this.getContactDisplayName(ch.id, ch.name),
+        phone: ch.phone,
+        unreadCount: ch.unreadCount,
+        lastMessage: ch.lastMessage,
+        lastTimestamp: ch.conversationTimestamp,
+        messages: recentIncoming.slice(-(Number(ch.unreadCount) || 5))
+      });
+    }
+
+    return {
+      totalUnreadChats: items.length,
+      totalUnreadMessages: items.reduce((acc, x) => acc + (Number(x.unreadCount) || 0), 0),
+      chats: items
+    };
+  }
+
+  /**
+   * Sends "typing..." (yazıyor...) state or marks chat as seen/read in WhatsApp Web.
+   */
+  async sendPresenceState(toOrName, state = 'typing', durationSeconds = 5) {
+    if (this.status !== 'connected' || !this.client?.pupPage) {
+      throw new Error('WhatsApp henüz bağlı değil.');
+    }
+    const resolved = this.resolveRecipient(toOrName);
+    const mode = String(state || 'typing').toLowerCase();
+
+    await this.client.pupPage.evaluate(
+      async ({ targetId, mode, durationMs }) => {
+        const Collections = window.require('WAWebCollections');
+        const chat = Collections?.Chat?.get?.(targetId);
+        if (!chat) return;
+        if (mode === 'seen' || mode === 'read' || mode === 'okundu') {
+          if (window.WWebJS?.sendSeen) {
+            await window.WWebJS.sendSeen(targetId);
+          } else if (chat.unreadCount) {
+            chat.unreadCount = 0;
+          }
+          return;
+        }
+        const Presence = window.require('WAWebChatStateBridge') || window.require('WAWebSendChatStateAction');
+        if (Presence?.sendChatStateComposing) {
+          Presence.sendChatStateComposing(chat.id);
+          setTimeout(() => {
+            try { Presence.sendChatStatePaused(chat.id); } catch (e) {}
+          }, durationMs);
+        }
+      },
+      {
+        targetId: resolved.id,
+        mode,
+        durationMs: Math.min(Math.max(Number(durationSeconds) || 5, 1), 25) * 1000
+      }
+    );
+
+    if (mode === 'seen' || mode === 'read' || mode === 'okundu') {
+      if (this.store.chats[resolved.id]) {
+        this.store.chats[resolved.id].unreadCount = 0;
+      }
+    }
+
+    return {
+      success: true,
+      to: resolved.id,
+      recipientName: resolved.name,
+      recipientPhone: resolved.phone,
+      state: mode
+    };
+  }
+
+  addWebhook(url) {
+    const clean = String(url || '').trim();
+    if (!/^https?:\/\//i.test(clean)) {
+      throw new Error('Geçerli bir HTTP/HTTPS Webhook URL adresi girin.');
+    }
+    this.webhooks.add(clean);
+    return Array.from(this.webhooks);
+  }
+
+  removeWebhook(url) {
+    this.webhooks.delete(String(url || '').trim());
+    return Array.from(this.webhooks);
+  }
+
+  getWebhooks() {
+    return Array.from(this.webhooks);
+  }
+
+  dispatchWebhooks(msg) {
+    if (!this.webhooks.size) return;
+    const payload = JSON.stringify({
+      event: 'incoming_message',
+      message: msg,
+      plainText: `[${new Date(msg.timestamp).toLocaleString('tr-TR')}] ${msg.senderName} (+${msg.senderPhone}): ${msg.text}`,
+      timestamp: Date.now()
+    });
+
+    for (const targetUrl of this.webhooks) {
+      try {
+        const parsed = new URL(targetUrl);
+        const mod = parsed.protocol === 'https:' ? require('https') : require('http');
+        const req = mod.request(
+          targetUrl,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json; charset=utf-8',
+              'Content-Length': Buffer.byteLength(payload)
+            },
+            timeout: 5000
+          },
+          (res) => res.resume()
+        );
+        req.on('error', () => {});
+        req.write(payload);
+        req.end();
+      } catch (e) {}
+    }
   }
 }
 

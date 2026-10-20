@@ -430,13 +430,14 @@
           </p>
           <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;">
             <button class="btn btn-sm" style="background:#182229;border:1px solid #2a3942;" onclick="runPlainCmd('DURUM')">DURUM</button>
+            <button class="btn btn-sm" style="background:#182229;border:1px solid #2a3942;" onclick="runPlainCmd('OKUNMAMIS')">🔔 OKUNMAMIS</button>
             <button class="btn btn-sm" style="background:#182229;border:1px solid #2a3942;" onclick="runPlainCmd('SOHBETLER 15')">SOHBETLER 15</button>
             <button class="btn btn-sm" style="background:#182229;border:1px solid #2a3942;" onclick="runPlainCmd('MESAJLAR Ahmet Yılmaz')">MESAJLAR Ahmet Yılmaz</button>
-            <button class="btn btn-sm" style="background:#182229;border:1px solid #2a3942;" onclick="runPlainCmd('KISILER Ayşe')">KISILER Ayşe</button>
+            <button class="btn btn-sm" style="background:#182229;border:1px solid #2a3942;" onclick="runPlainCmd('BEKLE * | 30')">⏳ BEKLE * | 30sn</button>
             <button class="btn btn-sm" style="background:#182229;border:1px solid #2a3942;" onclick="runPlainCmd('YARDIM')">YARDIM (Kılavuz)</button>
           </div>
           <div style="display: flex; gap: 8px; margin-bottom: 10px;">
-            <input type="text" id="plainCmdInput" value="SOHBETLER 10" placeholder="Örn: MESAJLAR Ahmet Yılmaz, GONDER Ahmet | Merhaba veya DOSYA Ahmet | C:\rapor.pdf" style="flex:1;background:#182229;border:1px solid #2a3942;color:#fff;padding:8px 12px;border-radius:8px;font-size:13px;" />
+            <input type="text" id="plainCmdInput" value="SOHBETLER 10" placeholder="Örn: SOR Ahmet | Müsait misin? | 60, BEKLE Ahmet | 60, GONDER Ahmet | Merhaba" style="flex:1;background:#182229;border:1px solid #2a3942;color:#fff;padding:8px 12px;border-radius:8px;font-size:13px;" />
             <button class="btn" onclick="runPlainCmd()">Çalıştır</button>
           </div>
           <pre id="plainCmdOutput" style="max-height: 240px; overflow-y: auto; white-space: pre-wrap;">Komut çıktısı burada düz metin (plain text) olarak görünecek...</pre>
@@ -452,12 +453,13 @@
 Ardından http://localhost:3000/text adresine düz metin komutları göndererek
 (veya tanımlı whatsapp MCP aracını kullanarak) WhatsApp mesajlarımı yönet."</pre>
           <pre>• DURUM                                      -> Bağlantı ve hesap bilgisi
-• SOHBETLER 20                               -> Son 20 konuşmayı ve son mesajları listeler
-• MESAJLAR Ahmet Yılmaz                      -> Ahmet Yılmaz ile olan mesaj geçmişini getirir
+• OKUNMAMIS                                  -> Okunmamış (yeni gelen) mesajları olan sohbetleri listeler
+• SOR Ahmet | Müsait misin? | 120            -> Mesajı gönderir, Ahmet yanıt yazana kadar bekler ve AI'ı uyandırır!
+• BEKLE Ahmet | 120   (veya BEKLE * | 120)   -> Yeni mesaj gelene kadar bekler, mesaj anında AI'ı uyandırır!
 • GONDER Ahmet | Merhaba!                    -> Ahmet'e doğrudan isimle mesaj gönderir
 • DOSYA Ahmet | C:\rapor.pdf | Rapor ektedir -> Ahmet'e bilgisayardaki dosyayı gönderir
-• KISILER Ayşe                               -> Rehberde Ayşe isimli kişileri ve numaralarını bulur
-• ARA toplantı                               -> Mesaj geçmişinde 'toplantı' kelimesini arar</pre>
+• YAZIYOR Ahmet       / OKUNDU Ahmet         -> 'Yazıyor...' efekti gösterir veya mesajları Mavi Tik yapar
+• SOHBETLER 20        / MESAJLAR Ahmet       -> Son konuşmaları veya kişiyle olan mesaj geçmişini getirir</pre>
         </div>
       </div>
     </div>

@@ -16,12 +16,17 @@ Yapay zeka ajanları hiçbir JSON ayrıştırma (parsing) işlemine gerek duymad
 | Düz Metin Komutu | Açıklama | Örnek Kullanım |
 | :--- | :--- | :--- |
 | `DURUM` (veya `STATUS`) | Bağlantı durumunu, aktif numarayı ve kişi/sohbet/mesaj sayılarını verir. | `DURUM` |
+| `OKUNMAMIS` (veya `UNREAD`) | Okunmamış (yeni gelen) mesajı olan tüm sohbetleri ve okunmamış mesaj içeriklerini listeler. | `OKUNMAMIS` |
+| `SOR <Kişi Adı veya Tel> \| <Mesaj> \| [Saniye]` | **Gönder ve Yanıt Gelince AI'ı Uyandır:** Mesajı gönderir, karşı taraf yanıt yazana kadar isteği bekletir ve yanıt geldiği anda AI'ı uyandırır! | `SOR Ahmet Yılmaz \| Merhaba müsait misin? \| 120` |
+| `BEKLE [Kişi Adı veya *] \| [Saniye]` | **Yanıt Bekle (AI Wake-Up):** Belirtilen kişiden (veya `*` ile herhangi birinden) yeni mesaj gelene kadar bekler, mesaj geldiği an AI'ı uyandırır. | `BEKLE Ahmet Yılmaz \| 120` veya `BEKLE * \| 60` |
 | `SOHBETLER [limit] [arama]` | Son konuşulan kişileri, grupları ve son mesajları listeler. | `SOHBETLER 20` veya `SOHBETLER 10 Proje` |
 | `MESAJLAR <Kişi Adı veya Tel> \| [limit]` | Kişi ismiyle veya numarayla geçmiş ve yeni tüm mesajları getirir. | `MESAJLAR Ahmet Yılmaz` veya `MESAJLAR Ayşe Demir \| 50` |
 | `SON_MESAJLAR [limit]` | Tüm sohbetlerdeki son mesajları listeler. | `SON_MESAJLAR 25` |
 | `GELENLER [limit]` | Sadece karşı taraftan gelen son mesajları listeler. | `GELENLER 20` |
 | `GONDER <Kişi Adı veya Tel> \| <Mesaj>` | Rehberdeki kişi ismini (veya numarayı) bulup mesaj gönderir. | `GONDER Ahmet Yılmaz \| Merhaba, nasılsın?` |
 | `DOSYA <Kişi Adı veya Tel> \| <Dosya Yolu veya URL> \| [Açıklama]` | Kişi ismine veya numaraya bilgisayardaki dosyayı (PDF, görsel, belge, ses, video) veya URL'yi gönderir. | `DOSYA Ahmet Yılmaz \| C:\rapor.pdf \| Rapor ektedir` |
+| `YAZIYOR <Kişi Adı veya Tel>` | AI yanıt hazırlarken karşı tarafa `"yazıyor..."` (`typing`) efekti gösterir. | `YAZIYOR Ahmet Yılmaz` |
+| `OKUNDU <Kişi Adı veya Tel>` | Kişinin sohbetindeki mesajları okundu (Mavi Tik) olarak işaretler. | `OKUNDU Ahmet Yılmaz` |
 | `KISILER [arama]` (veya `REHBER`) | Rehberdeki kişileri gerçek telefon numaralarıyla (`+905...`) listeler. | `KISILER Ayşe` |
 | `ARA <kelime>` (veya `SEARCH`) | Tüm mesaj geçmişinde kelime araması yapar. | `ARA toplantı` |
 | `SENKRONIZE` (veya `SYNC`) | WhatsApp Web üzerinden tüm kişileri ve mesaj geçmişini yeniler. | `SENKRONIZE` |
@@ -55,6 +60,17 @@ Yapay zeka ajanları `curl`, `fetch`, `Invoke-RestMethod`, `python requests` vey
    - **POST (`text/plain`):** `POST http://localhost:3000/text/send-file` $\rightarrow$ Gövde (Body): `Ahmet Yılmaz | C:\rapor.pdf | Rapor ektedir`
    - **POST (`/text`):** `POST http://localhost:3000/text` $\rightarrow$ Gövde (Body): `DOSYA Ahmet Yılmaz | C:\rapor.pdf | Rapor ektedir`
    - **GET (Tek satır URL):** `GET http://localhost:3000/text/send-file?to=Ahmet&filePath=C:\rapor.pdf&caption=Rapor`
+9. **Mesaj Gönder ve Yanıt Gelince AI'ı Uyandır (Send & Wait):**
+   - **POST (`text/plain`):** `POST http://localhost:3000/text/ask` $\rightarrow$ Gövde (Body): `Ahmet Yılmaz | Merhaba müsait misin? | 120`
+   - **GET (Tek satır URL):** `GET http://localhost:3000/text/ask?to=Ahmet&text=Merhaba&timeout=120`
+10. **Yeni Mesaj Gelene Kadar Bekle ve AI'ı Uyandır (Long-Polling Wake-Up):**
+    - `GET http://localhost:3000/text/wait?chat=Ahmet&timeout=120` (Belirli kişiden yanıt bekler)
+    - `GET http://localhost:3000/text/wait?timeout=120` (Herhangi birinden yeni mesaj bekler)
+11. **Okunmamış Mesajları Listele:**
+    - `GET http://localhost:3000/text/unread`
+12. **Canlı SSE (Server-Sent Events) Mesaj Akışı:**
+    - `GET http://localhost:3000/text/stream` (Düz metin canlı akış)
+    - `GET http://localhost:3000/api/stream` (JSON canlı akış)
 
 ---
 
@@ -63,8 +79,16 @@ Yapay zeka ajanları `curl`, `fetch`, `Invoke-RestMethod`, `python requests` vey
 Terminal komutu çalıştırabilen yapay zekalar (**OpenCode**, **Claude Code**, **Gemini**) şu komutları doğrudan çalıştırabilir:
 
 ```powershell
-# Durum kontrolü
+# Durum ve okunmamış mesaj kontrolü
 node wa-cli.js DURUM
+node wa-cli.js OKUNMAMIS
+
+# Mesaj gönder ve karşı taraf yanıt yazana kadar bekleyip AI'ı uyandır (120 sn timeout)
+node wa-cli.js "SOR Ahmet Yılmaz | Merhaba, müsait misin? | 120"
+
+# Herhangi birinden (veya belirli kişiden) yeni mesaj gelene kadar bekle ve AI'ı uyandır
+node wa-cli.js "BEKLE * | 60"
+node wa-cli.js "BEKLE Ahmet Yılmaz | 120"
 
 # Son 15 sohbeti düz metin listele
 node wa-cli.js SOHBETLER 15
@@ -91,7 +115,11 @@ node wa-cli.js "DOSYA Ahmet Yılmaz | C:\rapor.pdf | Rapor ektedir"
 
 Gemini, OpenCode ve Claude içerisine otomatik tanımlanan `whatsapp` MCP sunucusu şu araçları sunar:
 
-- **`whatsapp_plain_text`**: `command` parametresine yukarıdaki düz metin komutlarından herhangi birini alır (`"MESAJLAR Ahmet Yılmaz"`, `"GONDER Ahmet | Merhaba"`, `"DOSYA Ahmet | C:\\rapor.pdf | Rapor"` vb.) ve düz metin döner.
+- **`whatsapp_plain_text`**: `command` parametresine yukarıdaki düz metin komutlarından herhangi birini alır (`"SOR Ahmet | Müsait misin? | 120"`, `"BEKLE * | 60"`, `"OKUNMAMIS"`, `"MESAJLAR Ahmet Yılmaz"`, `"GONDER Ahmet | Merhaba"`, `"DOSYA Ahmet | C:\\rapor.pdf | Rapor"` vb.) ve düz metin döner.
+- **`whatsapp_send_and_wait_reply`**: Kişiye mesaj gönderir ve karşı taraf WhatsApp'tan yanıt yazana kadar bekleyip yanıt geldiği anda AI'ı uyandırır (Loop/polling yapmadan tek adımda soru-cevap).
+- **`whatsapp_wait_for_reply`**: Belirli bir kişiden veya herhangi birinden yeni WhatsApp mesajı gelene kadar bekler, mesaj geldiği anda AI'ı uyandırır.
+- **`whatsapp_get_unread`**: Okunmamış (yeni gelen) mesajı olan sohbetleri ve okunmamış mesajları getirir.
+- **`whatsapp_send_presence`**: Sohbette `"yazıyor..."` (`typing`) gösterir veya mesajları `"okundu"` (`seen` / Mavi Tik) yapar.
 - **`whatsapp_get_status`**: Bağlantı ve istatistik bilgisi.
 - **`whatsapp_send_message`**: `to` (kişi adı veya numara) ve `text` (mesaj).
 - **`whatsapp_send_file`**: `to` (kişi adı veya numara), `filePath` (dosya yolu veya URL) ve `caption` (açıklama) ile dosya/medya gönderir.

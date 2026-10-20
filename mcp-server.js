@@ -70,7 +70,7 @@ function forwardRpcToHttp(rpcPayload) {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(body)
         },
-        timeout: 15000
+        timeout: 650000
       },
       (res) => {
         let data = '';

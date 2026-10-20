@@ -88,7 +88,41 @@ async function main() {
   }
 
   if (
-    ['DURUM', 'SOHBETLER', 'MESAJLAR', 'OKU', 'SON_MESAJLAR', 'GELENLER', 'GONDER', 'GÖNDER', 'DOSYA', 'DOSYA_GONDER', 'MEDYA', 'FILE', 'SEND_FILE', 'KISILER', 'KİŞİLER', 'REHBER', 'ARA', 'YARDIM', 'KILAVUZ', 'SENKRONIZE'].includes(upper)
+    [
+      'DURUM',
+      'OKUNMAMIS',
+      'OKUNMAMIŞ',
+      'OKUNMAMISLAR',
+      'UNREAD',
+      'SOHBETLER',
+      'MESAJLAR',
+      'OKU',
+      'SON_MESAJLAR',
+      'GELENLER',
+      'GONDER',
+      'GÖNDER',
+      'SOR',
+      'ASK',
+      'GONDER_BEKLE',
+      'BEKLE',
+      'YANIT_BEKLE',
+      'YAZIYOR',
+      'TYPING',
+      'OKUNDU',
+      'SEEN',
+      'DOSYA',
+      'DOSYA_GONDER',
+      'MEDYA',
+      'FILE',
+      'SEND_FILE',
+      'KISILER',
+      'KİŞİLER',
+      'REHBER',
+      'ARA',
+      'YARDIM',
+      'KILAVUZ',
+      'SENKRONIZE'
+    ].includes(upper)
   ) {
     const fullCmd = [cmd, arg1, ...rest].filter(Boolean).join(' ');
     const out = await request('POST', '/text', fullCmd, true);
@@ -106,6 +140,32 @@ async function main() {
     case 'status': {
       const res = await request('GET', '/api/status');
       delete res.qrDataUrl;
+      console.log(JSON.stringify(res, null, 2));
+      break;
+    }
+    case 'unread': {
+      const res = await request('GET', '/api/unread');
+      console.log(JSON.stringify(res, null, 2));
+      break;
+    }
+    case 'wait': {
+      const chatId = arg1 || '*';
+      const timeoutSeconds = Number(rest[0]) || 120;
+      const res = await request('POST', '/api/wait', { chatId, timeoutSeconds });
+      console.log(JSON.stringify(res, null, 2));
+      break;
+    }
+    case 'ask': {
+      const to = arg1;
+      const lastArg = rest[rest.length - 1];
+      const hasTimeout = rest.length > 1 && /^\d+$/.test(lastArg);
+      const timeoutSeconds = hasTimeout ? Number(lastArg) : 120;
+      const text = (hasTimeout ? rest.slice(0, -1) : rest).join(' ');
+      if (!to || !text) {
+        console.error('Kullanım: node wa-cli.js ask <isim_veya_numara> <mesaj> [saniye]');
+        process.exit(1);
+      }
+      const res = await request('POST', '/api/ask', { to, text, timeoutSeconds });
       console.log(JSON.stringify(res, null, 2));
       break;
     }

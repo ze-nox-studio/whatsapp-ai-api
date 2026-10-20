@@ -11,13 +11,13 @@ const { executePlainTextCommand } = require('./plain-text-handler');
 const TOOLS = [
   {
     name: 'whatsapp_plain_text',
-    description: 'WhatsApp ile doğrudan DÜZ METİN (Plain Text) komutlarıyla iletişim kurar ve düz metin yanıt alır. Komutlar: "DURUM", "SOHBETLER 20", "MESAJLAR <Kişi Adı>", "SON_MESAJLAR 25", "GONDER <Kişi Adı veya Numara> | <Mesaj>", "DOSYA <Kişi Adı veya Numara> | <Dosya Yolu veya URL> | [Açıklama]", "KISILER <Arama>", "ARA <Kelime>", "YARDIM".',
+    description: 'WhatsApp ile doğrudan DÜZ METİN (Plain Text) komutlarıyla iletişim kurar ve düz metin yanıt alır. Komutlar: "DURUM", "OKUNMAMIS", "SOHBETLER 20", "MESAJLAR <Kişi Adı>", "SON_MESAJLAR 25", "GONDER <Kişi Adı veya Numara> | <Mesaj>", "SOR <Kişi Adı> | <Mesaj> | [Saniye]" (Mesaj gönderip yanıt gelene kadar bekler), "BEKLE [Kişi Adı veya *] | [Saniye]" (Yanıt gelince AI\'ı uyandırır), "DOSYA <Kişi Adı> | <Dosya Yolu veya URL> | [Açıklama]", "YAZIYOR <Kişi Adı>", "OKUNDU <Kişi Adı>", "KISILER <Arama>", "ARA <Kelime>", "YARDIM".',
     inputSchema: {
       type: 'object',
       properties: {
         command: {
           type: 'string',
-          description: 'Düz metin komutu (Örn: "MESAJLAR Ahmet Yılmaz", "GONDER Ayşe Demir | Merhaba nasılsın?", "DOSYA Ahmet Yılmaz | C:\\rapor.pdf | Rapor ektedir", "SOHBETLER 15")'
+          description: 'Düz metin komutu (Örn: "SOR Ahmet Yılmaz | Merhaba müsait misin? | 120", "BEKLE Ahmet Yılmaz | 120", "OKUNMAMIS", "MESAJLAR Ahmet Yılmaz", "GONDER Ayşe Demir | Merhaba")'
         }
       },
       required: ['command']
@@ -52,6 +52,83 @@ const TOOLS = [
         }
       },
       required: ['to', 'text']
+    }
+  },
+  {
+    name: 'whatsapp_send_and_wait_reply',
+    description: 'Belirtilen kişiye mesaj gönderir VE karşı taraf yanıt yazana kadar bekler. Yanıt geldiği anda AI ajanını uyandırır ve karşı tarafın cevabını döndürür (Sürekli yoklama/polling yapmaya gerek kalmaz).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        to: {
+          type: 'string',
+          description: 'Alıcı KİŞİ İSMİ (örn: "Ahmet Yılmaz", "Ayşe Demir") veya telefon numarası'
+        },
+        text: {
+          type: 'string',
+          description: 'Gönderilecek soru veya mesaj metni'
+        },
+        timeoutSeconds: {
+          type: 'number',
+          description: 'Yanıt için beklenecek maksimum süre (saniye, varsayılan: 120)'
+        }
+      },
+      required: ['to', 'text']
+    }
+  },
+  {
+    name: 'whatsapp_wait_for_reply',
+    description: 'Belirtilen kişiden/gruptan (veya chatId boş/"*" bırakılırsa herhangi birinden) yeni bir WhatsApp mesajı gelene kadar bekler. Mesaj geldiği anda AI ajanını uyandırıp mesajı döndürür.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        chatId: {
+          type: 'string',
+          description: 'Opsiyonel: Yanıt beklenecek KİŞİ İSMİ (örn: "Ahmet Yılmaz"), telefon numarası veya tüm sohbetler için "*"'
+        },
+        timeoutSeconds: {
+          type: 'number',
+          description: 'Maksimum bekleme süresi (saniye, varsayılan: 120)'
+        }
+      },
+      required: []
+    }
+  },
+  {
+    name: 'whatsapp_get_unread',
+    description: 'Okunmamış mesajı bulunan tüm sohbetleri ve bekleyen yeni mesajları tek seferde getirir.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: {
+          type: 'number',
+          description: 'Maksimum sohbet sayısı (varsayılan: 30)'
+        }
+      },
+      required: []
+    }
+  },
+  {
+    name: 'whatsapp_send_presence',
+    description: 'Karşı tarafa WhatsApp\'ta "yazıyor..." (typing) durumunu gösterir veya sohbeti "okundu" (seen / mavi tik) olarak işaretler.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        to: {
+          type: 'string',
+          description: 'Kişi adı veya telefon numarası'
+        },
+        state: {
+          type: 'string',
+          enum: ['typing', 'seen'],
+          description: '"typing" (yazıyor...) veya "seen" (okundu / mavi tik)'
+        },
+        durationSeconds: {
+          type: 'number',
+          description: 'Yazıyor durumunun süresi (saniye, varsayılan: 5)'
+        }
+      },
+      required: ['to', 'state']
     }
   },
   {
@@ -182,6 +259,23 @@ async function executeTool(waManager, name, args = {}) {
       return await waManager.sendMessage(args.to, args.text, {
         replyToMessageId: args.replyToMessageId
       });
+    }
+    case 'whatsapp_send_and_wait_reply': {
+      return await waManager.sendAndWaitForReply(args.to, args.text, {
+        timeoutSeconds: args.timeoutSeconds || 120
+      });
+    }
+    case 'whatsapp_wait_for_reply': {
+      return await waManager.waitForReply({
+        chatId: args.chatId || '*',
+        timeoutSeconds: args.timeoutSeconds || 120
+      });
+    }
+    case 'whatsapp_get_unread': {
+      return await waManager.getUnreadSummary(args.limit || 30);
+    }
+    case 'whatsapp_send_presence': {
+      return await waManager.sendPresenceState(args.to, args.state || 'typing', args.durationSeconds || 5);
     }
     case 'whatsapp_send_file': {
       return await waManager.sendMedia(

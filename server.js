@@ -247,6 +247,76 @@ async function handlePlainTextSendFile(req, res) {
 app.get('/text/send-file', handlePlainTextSendFile);
 app.post('/text/send-file', handlePlainTextSendFile);
 
+// Düz Metin Yanıt Bekleme (AI Uyandırıcı - Blocking Wait)
+async function handlePlainTextWait(req, res) {
+  try {
+    const chat = req.query.chat || req.query.to || req.query.name || (typeof req.body === 'string' ? req.body.trim() : req.body?.chat || '*');
+    const timeout = Number(req.query.timeout || req.query.timeoutSeconds || req.body?.timeoutSeconds || 120);
+    const output = await executePlainTextCommand(waManager, `BEKLE ${chat || '*'} | ${timeout}`, PORT);
+    sendPlain(res, output);
+  } catch (err) {
+    sendPlain(res, `❌ HATA: ${err.message}`, 400);
+  }
+}
+
+app.get('/text/wait', handlePlainTextWait);
+app.post('/text/wait', handlePlainTextWait);
+
+// Düz Metin Gönder ve Yanıt Bekle (SOR / ASK)
+async function handlePlainTextAsk(req, res) {
+  try {
+    let raw = '';
+    if (typeof req.body === 'string' && req.body.trim()) {
+      raw = req.body.trim().replace(/^(SOR|ASK|GONDER_BEKLE|SEND_WAIT)\s+/i, '');
+    } else {
+      const to = req.query.to || req.query.name || req.body?.to || req.body?.name || '';
+      const text = req.query.text || req.query.message || req.body?.text || req.body?.message || '';
+      const timeout = req.query.timeout || req.body?.timeoutSeconds || 120;
+      raw = `${to} | ${text} | ${timeout}`;
+    }
+    const output = await executePlainTextCommand(waManager, `SOR ${raw}`, PORT);
+    sendPlain(res, output);
+  } catch (err) {
+    sendPlain(res, `❌ HATA: ${err.message}`, 400);
+  }
+}
+
+app.get('/text/ask', handlePlainTextAsk);
+app.post('/text/ask', handlePlainTextAsk);
+
+// Düz Metin Okunmamış Mesajlar Özeti
+app.get('/text/unread', async (req, res) => {
+  try {
+    const output = await executePlainTextCommand(waManager, 'OKUNMAMIS', PORT);
+    sendPlain(res, output);
+  } catch (err) {
+    sendPlain(res, `❌ HATA: ${err.message}`, 400);
+  }
+});
+
+// Gerçek Zamanlı Düz Metin SSE Akışı (AI Stream Wakeup)
+app.get('/text/stream', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive'
+  });
+  res.write(`# WhatsApp AI Plain-Text Canlı Mesaj Akışı Başladı\n\n`);
+
+  const onIncoming = (msg) => {
+    const filter = req.query.chat ? req.query.chat.toLowerCase() : '';
+    if (filter && !String(msg.chatName || '').toLowerCase().includes(filter) && !String(msg.senderPhone || '').includes(filter)) {
+      return;
+    }
+    res.write(`data: [${new Date(msg.timestamp).toLocaleString('tr-TR')}] ${msg.senderName} (+${msg.senderPhone}): ${msg.text}\n\n`);
+  };
+
+  waManager.on('incoming_message', onIncoming);
+  req.on('close', () => {
+    waManager.removeListener('incoming_message', onIncoming);
+  });
+});
+
 // ============================================================================
 // 2. JSON REST API ENDPOINTS
 // ============================================================================
@@ -415,6 +485,99 @@ app.post('/api/sync', async (req, res) => {
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+// JSON API: Yanıt Gelene Kadar Bekle (AI Wake-Up)
+app.all('/api/wait', async (req, res) => {
+  try {
+    const chatId = req.query.chatId || req.query.chat || req.query.to || req.body?.chatId || req.body?.to || '*';
+    const timeoutSeconds = Number(req.query.timeoutSeconds || req.query.timeout || req.body?.timeoutSeconds || 120);
+    const collectBurstMs = Number(req.query.collectBurstMs || req.body?.collectBurstMs || 1500);
+    const result = await waManager.waitForReply({ chatId, timeoutSeconds, collectBurstMs });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+// JSON API: Mesaj Gönder ve Yanıt Gelene Kadar Bekle (AI Send & Wake-Up)
+app.post(['/api/ask', '/api/send-and-wait'], async (req, res) => {
+  try {
+    const { to, name, phone, chatId, text, message, timeoutSeconds, collectBurstMs, replyToMessageId } = req.body;
+    const target = to || name || phone || chatId;
+    const bodyText = text || message;
+    const result = await waManager.sendAndWaitForReply(target, bodyText, {
+      timeoutSeconds: Number(timeoutSeconds) || 120,
+      collectBurstMs: Number(collectBurstMs) || 1500,
+      replyToMessageId
+    });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+// JSON API: Okunmamış Mesajlar Özeti
+app.get('/api/unread', async (req, res) => {
+  try {
+    const limit = Number(req.query.limit) || 30;
+    const summary = await waManager.getUnreadSummary(limit);
+    res.json({ ok: true, ...summary });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+// JSON API: Yazıyor... (typing) veya Okundu (seen) Durumu Gönder
+app.post('/api/presence', async (req, res) => {
+  try {
+    const { to, name, phone, chatId, state, durationSeconds } = req.body;
+    const target = to || name || phone || chatId;
+    const result = await waManager.sendPresenceState(target, state || 'typing', durationSeconds || 5);
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+// JSON API: Gerçek Zamanlı SSE Mesaj Akışı
+app.get('/api/stream', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive'
+  });
+  res.write(`event: connected\ndata: ${JSON.stringify({ status: 'listening', timestamp: Date.now() })}\n\n`);
+
+  const onIncoming = (msg) => {
+    res.write(`event: incoming_message\ndata: ${JSON.stringify(msg)}\n\n`);
+  };
+
+  waManager.on('incoming_message', onIncoming);
+  req.on('close', () => {
+    waManager.removeListener('incoming_message', onIncoming);
+  });
+});
+
+// JSON API: Webhook Yönetimi (Gelen mesajda AI servisini otomatik tetikler)
+app.get('/api/webhooks', (req, res) => {
+  res.json({ ok: true, webhooks: waManager.getWebhooks() });
+});
+
+app.post('/api/webhooks', (req, res) => {
+  try {
+    const url = req.body?.url || req.query.url;
+    const webhooks = waManager.addWebhook(url);
+    res.json({ ok: true, webhooks });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.delete('/api/webhooks', (req, res) => {
+  const url = req.body?.url || req.query.url;
+  const webhooks = waManager.removeWebhook(url);
+  res.json({ ok: true, webhooks });
 });
 
 app.get('/api/search', (req, res) => {
