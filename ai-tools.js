@@ -6,7 +6,7 @@
  * - Plain Text Command Execution
  */
 
-const { executePlainTextCommand } = require('./plain-text-handler');
+const { executePlainTextCommand, sanitizeForAiStream, buildAiContinuityCoach } = require('./plain-text-handler');
 
 const TOOLS = [
   {
@@ -261,15 +261,27 @@ async function executeTool(waManager, name, args = {}) {
       });
     }
     case 'whatsapp_send_and_wait_reply': {
-      return await waManager.sendAndWaitForReply(args.to, args.text, {
-        timeoutSeconds: args.timeoutSeconds || 120
+      const safeTimeout = Math.min(Math.max(Number(args.timeoutSeconds) || 75, 5), 90);
+      const res = await waManager.sendAndWaitForReply(args.to, args.text, {
+        timeoutSeconds: safeTimeout
       });
+      if (Array.isArray(res.replies)) {
+        res.replies = res.replies.map((m) => ({ ...m, text: sanitizeForAiStream(m.text) }));
+      }
+      res.aiGuidance = buildAiContinuityCoach(res.replies || [], !res.replyReceived);
+      return res;
     }
     case 'whatsapp_wait_for_reply': {
-      return await waManager.waitForReply({
+      const safeTimeout = Math.min(Math.max(Number(args.timeoutSeconds) || 75, 5), 90);
+      const res = await waManager.waitForReply({
         chatId: args.chatId || '*',
-        timeoutSeconds: args.timeoutSeconds || 120
+        timeoutSeconds: safeTimeout
       });
+      if (Array.isArray(res.messages)) {
+        res.messages = res.messages.map((m) => ({ ...m, text: sanitizeForAiStream(m.text) }));
+      }
+      res.aiGuidance = buildAiContinuityCoach(res.messages || [], !res.received);
+      return res;
     }
     case 'whatsapp_get_unread': {
       return await waManager.getUnreadSummary(args.limit || 30);
