@@ -19,6 +19,14 @@ const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '127.0.0.1';
 const API_KEY = process.env.WA_API_KEY || '';
 
+// Global Hata Kalkanı: Beklenmeyen hatalarda veya kopmalarda sunucunun kapanmasını engelle
+process.on('uncaughtException', (err) => {
+  console.error('⚠️ [Kritik Hata Yakalandı - Sunucu Açık Tutuluyor]:', err?.message || err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('⚠️ [Unhandled Promise Yakalandı - Sunucu Açık Tutuluyor]:', reason?.message || reason);
+});
+
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });

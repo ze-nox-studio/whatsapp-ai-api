@@ -16,6 +16,7 @@
     "mcp": "node mcp-server.js",
     "cli": "node wa-cli.js",
     "setup-ai": "node setup-ai-configs.js",
+    "postinstall": "node scripts/patch-whatsapp-web.js",
     "test": "node test-api.js"
   },
   "keywords": [

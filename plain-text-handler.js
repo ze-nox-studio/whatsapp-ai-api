@@ -342,12 +342,24 @@ async function executePlainTextCommand(waManager, rawInput, port = 3000) {
       }
       let chatTarget = rest;
       let limit = 40;
+      let resolved = null;
       if (rest.includes('|')) {
         const [left, right] = rest.split('|').map((s) => s.trim());
         chatTarget = left;
         if (/^\d+$/.test(right)) limit = Number(right);
+        resolved = waManager.resolveRecipient(chatTarget);
+      } else {
+        // Pipe unutulduysa ("MESAJLAR Ahmet 20"): önce tam metni dene, bulunamazsa sondaki 1-4 haneli sayıyı limit say
+        const trailing = rest.match(/^(.+?)\s+(\d{1,4})$/);
+        try {
+          resolved = waManager.resolveRecipient(rest);
+        } catch (err) {
+          if (!trailing) throw err;
+          chatTarget = trailing[1].trim();
+          limit = Number(trailing[2]);
+          resolved = waManager.resolveRecipient(chatTarget);
+        }
       }
-      const resolved = waManager.resolveRecipient(chatTarget);
       const msgs = await waManager.getMessages({ chatId: resolved.id, limit });
       return formatMessagesText(msgs, `${resolved.name} (+${resolved.phone}) MESAJ GEÇMİŞİ`);
     }

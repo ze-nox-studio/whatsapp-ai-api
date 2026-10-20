@@ -1,3 +1,4 @@
+try { require('./scripts/patch-whatsapp-web').applyPatch({ silent: true }); } catch (e) {}
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const QRCode = require('qrcode');
 const qrcodeTerminal = require('qrcode-terminal');
@@ -1369,7 +1370,18 @@ class WhatsAppManager extends EventEmitter {
       sendOpts.sendMediaAsDocument = true;
     }
 
-    const sentMsg = await this.client.sendMessage(resolved.id, media, sendOpts);
+    if (this.client?.pupPage) {
+      const { LoadUtils } = require('whatsapp-web.js/src/util/Injected/Utils');
+      await this.client.pupPage.evaluate(LoadUtils).catch(() => {});
+    }
+
+    let sentMsg = null;
+    try {
+      sentMsg = await this.client.sendMessage(resolved.id, media, sendOpts);
+    } catch (err) {
+      console.error('[sendMedia Error]', err.message);
+      throw new Error(`Medya gönderilemedi: ${err.message}`);
+    }
 
     const logText = captionStr
       ? `[Dosya: ${displayFilename}] ${captionStr}`
